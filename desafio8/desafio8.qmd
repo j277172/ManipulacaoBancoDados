@@ -1,0 +1,585 @@
+---
+title: "📊 Análise de Desempenho Acadêmico"
+subtitle: "Departamento de Estatística - Universidade de Wisconsin-Madison"
+author: "João Eduardo Pastori Garcia"
+date: "`r Sys.Date()`"
+format:
+  html:
+    theme: 
+      - cosmo
+      - custom.scss
+    toc: true
+    toc-depth: 3
+    toc-location: left
+    toc-title: "Navegação"
+    code-fold: true
+    code-summary: "Ver Código"
+    code-tools: true
+    embed-resources: true
+    standalone: true
+    page-layout: full
+    fig-cap-location: bottom
+    fig-align: center
+    number-sections: true
+    smooth-scroll: true
+    link-external-newwindow: true
+execute:
+  echo: false
+  eval: true
+  warning: false
+  message: false
+  cache: false
+---
+
+::: {.hero-banner .text-center}
+# 🎓 Análise Acadêmica UW-Madison
+
+### Explorando padrões de desempenho no Departamento de Estatística
+:::
+
+```{r setup}
+#| include: false
+
+# Carregar bibliotecas
+suppressPackageStartupMessages({
+  library(readr); library(dplyr); library(tidyr) 
+  library(DBI); library(RSQLite)
+  library(DT); library(ggplot2); library(plotly)
+  library(htmltools); library(bslib) ; library(stringr)
+})
+
+# Configurar tema ggplot
+theme_set(theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(size = 16, face = "bold", margin = margin(b = 20)),
+    plot.subtitle = element_text(size = 12, color = "gray50"),
+    panel.grid.minor = element_blank(),
+    plot.background = element_rect(fill = "white", color = NA),
+    panel.background = element_rect(fill = "white", color = NA)
+  ))
+
+# Conectar ao banco SQLite
+conn <- dbConnect(RSQLite::SQLite(), "uwmadison.sqlite3")
+```
+
+```{r import-data}
+#| include: false
+
+# Importar CSVs para o banco se necessário
+csv_dir <- "archive"
+mapping <- list(
+  instructors         = "instructors.csv",
+  teachings           = "teachings.csv", 
+  sections            = "sections.csv",
+  course_offerings    = "course_offerings.csv",
+  courses             = "courses.csv",
+  subject_memberships = "subject_memberships.csv",
+  subjects            = "subjects.csv",
+  grade_distributions = "grade_distributions.csv"
+)
+
+for(tbl in names(mapping)) {
+  if(!tbl %in% dbListTables(conn)) {
+    df <- readr::read_csv(file.path(csv_dir, mapping[[tbl]]), show_col_types = FALSE)
+    DBI::dbWriteTable(conn, tbl, df, overwrite = TRUE)
+  }
+}
+
+# Transformar grade_distributions em formato longo
+df_gd <- dbReadTable(conn, "grade_distributions")
+grades_long <- df_gd %>%
+  select(course_offering_uuid, section_number,
+         a_count, ab_count, b_count, bc_count, c_count, d_count, f_count) %>%
+  pivot_longer(
+    cols = ends_with("_count"),
+    names_to = "grade", 
+    values_to = "count"
+  ) %>%
+  mutate(
+    grade = case_when(
+      grade == "a_count"  ~ "A",
+      grade == "ab_count" ~ "AB", 
+      grade == "b_count"  ~ "B",
+      grade == "bc_count" ~ "BC",
+      grade == "c_count"  ~ "C",
+      grade == "d_count"  ~ "D",
+      grade == "f_count"  ~ "F",
+      TRUE                ~ NA_character_
+    )
+  ) %>%
+  filter(!is.na(grade) & count > 0)
+
+dbWriteTable(conn, "grades_long", grades_long, overwrite = TRUE)
+```
+
+```{r query-data}
+#| include: false
+
+# Consulta: Professores STAT
+professores <- dbGetQuery(conn, "
+  SELECT DISTINCT i.id AS instructor_id, i.name AS professor
+  FROM instructors i
+    JOIN teachings t            ON i.id = t.instructor_id
+    JOIN sections s             ON t.section_uuid = s.uuid  
+    JOIN course_offerings co    ON s.course_offering_uuid = co.uuid
+    JOIN subject_memberships sm ON co.uuid = sm.course_offering_uuid
+    JOIN subjects sub           ON sm.subject_code = sub.code
+  WHERE sub.abbreviation = 'STAT'
+  ORDER BY i.name;
+")
+
+# Consulta: GPA por seção
+gpa_sec <- dbGetQuery(conn, "
+  SELECT
+    s.uuid                  AS section_uuid,
+    i.name                  AS professor,
+    c.number                AS course_number,
+    c.name                  AS course_name, 
+    co.term_code            AS term_code,
+    SUM(gl.count)           AS total_students,
+    ROUND(
+      SUM(
+        CASE gl.grade
+          WHEN 'A'  THEN gl.count * 4.0
+          WHEN 'AB' THEN gl.count * 3.5
+          WHEN 'B'  THEN gl.count * 3.0
+          WHEN 'BC' THEN gl.count * 2.5
+          WHEN 'C'  THEN gl.count * 2.0
+          WHEN 'D'  THEN gl.count * 1.0
+          WHEN 'F'  THEN gl.count * 0.0
+        END
+      ) / SUM(gl.count), 3
+    ) AS gpa
+  FROM sections s
+    JOIN teachings t            ON s.uuid = t.section_uuid
+    JOIN instructors i          ON t.instructor_id = i.id
+    JOIN course_offerings co    ON s.course_offering_uuid = co.uuid
+    JOIN courses c              ON co.course_uuid = c.uuid
+    JOIN subject_memberships sm ON co.uuid = sm.course_offering_uuid
+    JOIN subjects sub           ON sm.subject_code = sub.code
+    JOIN grades_long gl         ON gl.course_offering_uuid = co.uuid 
+                               AND gl.section_number = s.number
+  WHERE sub.abbreviation = 'STAT'
+  GROUP BY s.uuid, i.name, c.number, c.name, co.term_code
+  ORDER BY gpa;
+")
+
+# Análise por professor
+prof_gpa <- gpa_sec %>%
+  group_by(professor) %>%
+  summarise(
+    avg_gpa    = round(mean(gpa), 3),
+    n_sections = n(),
+    n_students = sum(total_students),
+    .groups = "drop"
+  ) %>%
+  arrange(avg_gpa)
+
+# Análise por disciplina  
+disc_gpa <- gpa_sec %>%
+  mutate(code = paste0("STAT ", course_number)) %>%
+  group_by(code, course_name) %>%
+  summarise(
+    avg_gpa    = round(mean(gpa), 3),
+    n_sections = n(), 
+    n_students = sum(total_students),
+    .groups = "drop"
+  ) %>%
+  arrange(avg_gpa)
+```
+
+# Resumo Executivo {.tabset}
+
+:::::::::::::::::::::::::::::::::: panel-tabset
+## 📈 Principais Insights
+
+::::::::::::::::::::::: row
+::::::: col-md-3
+:::::: {.card .text-center}
+::: {.card-header .bg-primary .text-white}
+**Total de Professores**
+:::
+
+:::: card-body
+::: {.display-1 .text-primary}
+`r nrow(professores)`
+:::
+::::
+::::::
+:::::::
+
+::::::: col-md-3
+:::::: {.card .text-center}
+::: {.card-header .bg-success .text-white}
+**Disciplinas Ativas**
+:::
+
+:::: card-body
+::: {.display-1 .text-success}
+`r nrow(disc_gpa)`
+:::
+::::
+::::::
+:::::::
+
+::::::: col-md-3
+:::::: {.card .text-center}
+::: {.card-header .bg-warning .text-white}
+**Total de Seções**
+:::
+
+:::: card-body
+::: {.display-1 .text-warning}
+`r nrow(gpa_sec)`
+:::
+::::
+::::::
+:::::::
+
+::::::: col-md-3
+:::::: {.card .text-center}
+::: {.card-header .bg-info .text-white}
+**Total de Estudantes**
+:::
+
+:::: card-body
+::: {.display-1 .text-info}
+`r format(sum(gpa_sec$total_students), big.mark = ",")`
+:::
+::::
+::::::
+:::::::
+:::::::::::::::::::::::
+
+------------------------------------------------------------------------
+
+::::::: {.row .mt-4}
+:::: col-md-6
+::: {.alert .alert-danger}
+**🔴 Professor Mais Desafiador**\
+**`r prof_gpa$professor[1]`**\
+GPA médio: **`r prof_gpa$avg_gpa[1]`**\
+Seções: `r prof_gpa$n_sections[1]` \| Estudantes: `r prof_gpa$n_students[1]`
+:::
+::::
+
+:::: col-md-6
+::: {.alert .alert-success}
+**🟢 Professor Mais Acessível**\
+**`r prof_gpa$professor[nrow(prof_gpa)]`**\
+GPA médio: **`r prof_gpa$avg_gpa[nrow(prof_gpa)]`**\
+Seções: `r prof_gpa$n_sections[nrow(prof_gpa)]` \| Estudantes: `r prof_gpa$n_students[nrow(prof_gpa)]`
+:::
+::::
+:::::::
+
+------------------------------------------------------------------------
+
+::::::: row
+:::: col-md-6
+::: {.alert .alert-danger}
+**🔴 Disciplina Mais Desafiadora**\
+**`r disc_gpa$code[1]`**\
+*`r disc_gpa$course_name[1]`*\
+GPA médio: **`r disc_gpa$avg_gpa[1]`**
+:::
+::::
+
+:::: col-md-6
+::: {.alert .alert-success}
+**🟢 Disciplina Mais Acessível**\
+**`r disc_gpa$code[nrow(disc_gpa)]`**\
+*`r disc_gpa$course_name[nrow(disc_gpa)]`*\
+GPA médio: **`r disc_gpa$avg_gpa[nrow(disc_gpa)]`**
+:::
+::::
+:::::::
+
+## 📊 Dados Detalhados
+
+### Base de Professores
+
+```{r professores-table}
+professores %>%
+  DT::datatable(
+    colnames = c("ID do Instrutor", "Nome do Professor"),
+    options = list(
+      pageLength = 15,
+      scrollY = "400px",
+      scrollCollapse = TRUE,
+      dom = 'Bfrtip',
+      buttons = c('copy', 'csv', 'excel', 'print'),
+      language = list(
+        search = "Pesquisar:",
+        lengthMenu = "Mostrar _MENU_ entradas",
+        info = "Mostrando _START_ a _END_ de _TOTAL_ entradas",
+        paginate = list(previous = "Anterior", `next` = "Próximo")
+      )
+    ),
+    extensions = 'Buttons',
+    class = 'table-striped table-hover'
+  ) %>%
+  DT::formatStyle(columns = 1:2, fontSize = '14px')
+```
+::::::::::::::::::::::::::::::::::
+
+# Análise de Desempenho por Professor
+
+```{r prof-analysis}
+# Preparar dados para visualização (Top/Bottom 10)
+n_prof <- nrow(prof_gpa)
+top_prof <- prof_gpa %>% slice_head(n = 10) %>% mutate(categoria = "🔴 Mais Desafiadores")
+bot_prof <- prof_gpa %>% slice_tail(n = 10) %>% mutate(categoria = "🟢 Mais Acessíveis")
+
+prof_plot_data <- bind_rows(top_prof, bot_prof) %>%
+  mutate(
+    professor = str_trunc(professor, width = 25),
+    label_text = paste0(professor, "
+GPA: ", avg_gpa, " | Estudantes: ", n_students)
+  )
+```
+
+## Ranking de Professores {.tabset}
+
+::: panel-tabset
+## 📊 Visualização Interativa
+
+```{r prof-plot}
+#| fig-height: 8
+#| fig-width: 12
+
+p_prof <- ggplot(prof_plot_data, aes(x = reorder(professor, avg_gpa), y = avg_gpa, fill = categoria, text = label_text)) +
+  geom_col(alpha = 0.8, width = 0.7) +
+  coord_flip() +
+  scale_fill_manual(
+    values = c("🔴 Mais Desafiadores" = "#e74c3c", "🟢 Mais Acessíveis" = "#27ae60"),
+    name = ""
+  ) +
+  labs(
+    title = "📊 Ranking de Professores por GPA Médio",
+    subtitle = "Top 10 Mais Desafiadores vs Top 10 Mais Acessíveis",
+    x = "Professor",
+    y = "GPA Médio",
+    caption = "Dados: University of Wisconsin-Madison | Departamento de Estatística"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "top",
+    plot.title = element_text(size = 16, face = "bold"),
+    plot.subtitle = element_text(size = 12, color = "gray50"),
+    axis.text.y = element_text(size = 10),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor = element_blank()
+  )
+
+ggplotly(p_prof, tooltip = "text") %>%
+  layout(
+    legend = list(orientation = "h", x = 0.5, xanchor = "center", y = 1.02),
+    margin = list(l = 150, r = 50, t = 100, b = 50)
+  )
+```
+
+## 📋 Tabela Detalhada
+
+```{r prof-table}
+prof_gpa %>%
+  mutate(
+    Posição = row_number(),
+    Professor = professor,
+    `GPA Médio` = avg_gpa,
+    `Nº Seções` = n_sections,
+    `Nº Estudantes` = n_students
+  ) %>%
+  select(Posição, Professor, `GPA Médio`, `Nº Seções`, `Nº Estudantes`) %>%
+  DT::datatable(
+    options = list(
+      pageLength = 20,
+      scrollY = "500px",
+      scrollCollapse = TRUE,
+      dom = 'Bfrtip',
+      buttons = c('copy', 'csv', 'excel'),
+      language = list(
+        search = "Pesquisar professor:",
+        lengthMenu = "Mostrar _MENU_ professores",
+        info = "Mostrando _START_ a _END_ de _TOTAL_ professores"
+      )
+    ),
+    extensions = 'Buttons',
+    class = 'table-striped table-hover'
+  ) %>%
+  DT::formatStyle(
+    'GPA Médio',
+    backgroundColor = DT::styleInterval(c(3.0, 3.5), c('#ffebee', '#fff3e0', '#e8f5e8'))
+  ) %>%
+  DT::formatRound('GPA Médio', 3)
+```
+:::
+
+# Análise de Desempenho por Disciplina
+
+```{r disc-analysis}
+# Preparar dados para visualização (Top/Bottom 10)
+n_disc <- nrow(disc_gpa) 
+top_disc <- disc_gpa %>% slice_head(n = 10) %>% mutate(categoria = "🔴 Mais Desafiadoras")
+bot_disc <- disc_gpa %>% slice_tail(n = 10) %>% mutate(categoria = "🟢 Mais Acessíveis") 
+
+disc_plot_data <- bind_rows(top_disc, bot_disc) %>%
+  mutate(
+    code_short = str_trunc(code, width = 12),
+    label_text = paste0(code, "
+", str_trunc(course_name, width = 30), "
+GPA: ", avg_gpa, " | Estudantes: ", n_students)
+  )
+```
+
+## Ranking de Disciplinas {.tabset}
+
+::: panel-tabset
+## 📊 Visualização Interativa
+
+```{r disc-plot}
+#| fig-height: 8
+#| fig-width: 12
+
+p_disc <- ggplot(disc_plot_data, aes(x = reorder(code_short, avg_gpa), y = avg_gpa, fill = categoria, text = label_text)) +
+  geom_col(alpha = 0.8, width = 0.7) +
+  coord_flip() +
+  scale_fill_manual(
+    values = c("🔴 Mais Desafiadoras" = "#e74c3c", "🟢 Mais Acessíveis" = "#27ae60"),
+    name = ""
+  ) +
+  labs(
+    title = "📊 Ranking de Disciplinas por GPA Médio", 
+    subtitle = "Top 10 Mais Desafiadoras vs Top 10 Mais Acessíveis",
+    x = "Disciplina",
+    y = "GPA Médio",
+    caption = "Dados: University of Wisconsin-Madison | Departamento de Estatística"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "top",
+    plot.title = element_text(size = 16, face = "bold"),
+    plot.subtitle = element_text(size = 12, color = "gray50"),
+    axis.text.y = element_text(size = 10),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor = element_blank()
+  )
+
+ggplotly(p_disc, tooltip = "text") %>%
+  layout(
+    legend = list(orientation = "h", x = 0.5, xanchor = "center", y = 1.02),
+    margin = list(l = 100, r = 50, t = 100, b = 50)
+  )
+```
+
+## 📋 Tabela Detalhada
+
+```{r disc-table}
+disc_gpa %>%
+  mutate(
+    Posição = row_number(),
+    Código = code,
+    Disciplina = str_trunc(course_name, width = 50),
+    `GPA Médio` = avg_gpa,
+    `Nº Seções` = n_sections,
+    `Nº Estudantes` = n_students
+  ) %>%
+  select(Posição, Código, Disciplina, `GPA Médio`, `Nº Seções`, `Nº Estudantes`) %>%
+  DT::datatable(
+    options = list(
+      pageLength = 20,
+      scrollY = "500px",
+      scrollCollapse = TRUE,
+      dom = 'Bfrtip',
+      buttons = c('copy', 'csv', 'excel'),
+      language = list(
+        search = "Pesquisar disciplina:",
+        lengthMenu = "Mostrar _MENU_ disciplinas",
+        info = "Mostrando _START_ a _END_ de _TOTAL_ disciplinas"
+      )
+    ),
+    extensions = 'Buttons',
+    class = 'table-striped table-hover'
+  ) %>%
+  DT::formatStyle(
+    'GPA Médio',
+    backgroundColor = DT::styleInterval(c(3.0, 3.5), c('#ffebee', '#fff3e0', '#e8f5e8'))
+  ) %>%
+  DT::formatRound('GPA Médio', 3)
+```
+:::
+
+# Metodologia e Dados {.tabset}
+
+::: panel-tabset
+## 📖 Sobre a Análise
+
+### Objetivo
+
+Esta análise examina padrões de desempenho acadêmico no Departamento de Estatística da UW-Madison, identificando professores e disciplinas com diferentes níveis de rigor acadêmico baseados no GPA médio dos estudantes.
+
+### Metodologia
+
+-   **Fonte dos dados**: Sistema acadêmico UW-Madison
+-   **Período analisado**: Dados históricos de múltiplos semestres
+-   **Métrica principal**: GPA médio ponderado por número de estudantes
+-   **Critérios de inclusão**: Apenas cursos do departamento de Estatística (STAT)
+
+### Cálculo do GPA
+
+O GPA é calculado usando a escala padrão americana: - A = 4.0 pontos - AB = 3.5 pontos\
+- B = 3.0 pontos - BC = 2.5 pontos - C = 2.0 pontos - D = 1.0 ponto - F = 0.0 pontos
+
+### Limitações
+
+-   Os dados refletem apenas o desempenho médio, não considerando fatores individuais
+-   Professores com poucas seções podem ter estatísticas menos representativas\
+-   Não foram consideradas variáveis como tamanho da turma ou modalidade do curso
+
+## 🔧 Especificações Técnicas
+
+### Ferramentas Utilizadas
+
+-   **Linguagem**: R (versão 4.4+)
+-   **Banco de dados**: SQLite
+-   **Visualização**: ggplot2 + plotly\
+-   **Tabelas interativas**: DT (DataTables)
+-   **Documento**: Quarto
+
+### Estrutura dos Dados
+
+```         
+📁 Tabelas principais:
+├── instructors (professores)
+├── courses (disciplinas)  
+├── sections (seções/turmas)
+├── grade_distributions (distribuição de notas)
+└── subject_memberships (associações por departamento)
+```
+
+### Processamento
+
+1.  **ETL**: Importação de CSVs para SQLite
+2.  **Transformação**: Conversão de grade_distributions para formato longo
+3.  **Agregação**: Cálculo de GPAs por professor e disciplina\
+4.  **Visualização**: Geração de gráficos interativos e tabelas
+
+------------------------------------------------------------------------
+
+**Autor**: João Eduardo Pastori Garcia\
+**Data**: `r Sys.Date()`\
+**Contato**: [GitHub](https://github.com/seu-usuario) \| [Email](mailto:seu-email@email.com)
+:::
+
+```{r cleanup}
+#| include: false
+dbDisconnect(conn)
+```
+
+::: {.footer .text-center .mt-5 .py-3 .bg-light}
+
+------------------------------------------------------------------------
+
+**Análise de Desempenho Acadêmico UW-Madison** \| Departamento de Estatística\
+Gerado automaticamente em `r Sys.Date()` com [Quarto](https://quarto.org) 📊
+:::
