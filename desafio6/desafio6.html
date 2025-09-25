@@ -1,0 +1,763 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Análise do Banco de Dados disco.db</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 30px;
+            margin-bottom: 50px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            transform: translateY(0);
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-number {
+            font-size: 3em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .stat-label {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .section {
+            margin-bottom: 50px;
+        }
+
+        .section h2 {
+            color: #2c3e50;
+            font-size: 2em;
+            margin-bottom: 30px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #3498db;
+        }
+
+        .table-container {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            font-weight: 600;
+            text-align: left;
+            font-size: 1.1em;
+        }
+
+        td {
+            padding: 15px 20px;
+            border-bottom: 1px solid #eee;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+
+        tr:hover {
+            background-color: #e3f2fd;
+            transition: background-color 0.3s ease;
+        }
+
+        .highlight {
+            background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            border-left: 5px solid #ff6b6b;
+        }
+
+        .info-box {
+            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        .footer {
+            background: #2c3e50;
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .header h1 {
+                font-size: 2em;
+            }
+
+            table {
+                font-size: 0.9em;
+            }
+
+            th, td {
+                padding: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎵 Análise do Banco disco.db</h1>
+            <p>Relatório Completo de Análise Musical</p>
+        </div>
+
+        <div class="content">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number">59</div>
+                    <div class="stat-label">Total de Clientes</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">24</div>
+                    <div class="stat-label">Países Diferentes</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">13</div>
+                    <div class="stat-label">Tabelas no Banco</div>
+                </div>
+            </div>
+            <div class="section">
+                <h2>📊 Clientes por País</h2>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>País</th>
+                                <th>Quantidade de Clientes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>USA</td>
+                                <td><strong>13</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Canada</td>
+                                <td><strong>8</strong></td>
+                            </tr>
+                            <tr>
+                                <td>France</td>
+                                <td><strong>5</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Brazil</td>
+                                <td><strong>5</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Germany</td>
+                                <td><strong>4</strong></td>
+                            </tr>
+                            <tr>
+                                <td>United Kingdom</td>
+                                <td><strong>3</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Portugal</td>
+                                <td><strong>2</strong></td>
+                            </tr>
+                            <tr>
+                                <td>India</td>
+                                <td><strong>2</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Czech Republic</td>
+                                <td><strong>2</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Sweden</td>
+                                <td><strong>1</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Spain</td>
+                                <td><strong>1</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Poland</td>
+                                <td><strong>1</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Norway</td>
+                                <td><strong>1</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Netherlands</td>
+                                <td><strong>1</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Italy</td>
+                                <td><strong>1</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Ireland</td>
+                                <td><strong>1</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Hungary</td>
+                                <td><strong>1</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Finland</td>
+                                <td><strong>1</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Denmark</td>
+                                <td><strong>1</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Chile</td>
+                                <td><strong>1</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Belgium</td>
+                                <td><strong>1</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Austria</td>
+                                <td><strong>1</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Australia</td>
+                                <td><strong>1</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Argentina</td>
+                                <td><strong>1</strong></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="section">
+                <h2>🏆 Top 5 Países com Mais Clientes</h2>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Posição</th>
+                                <th>País</th>
+                                <th>Quantidade de Clientes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>🥇 1º</td>
+                                <td>USA</td>
+                                <td><strong>13</strong></td>
+                            </tr>
+                            <tr>
+                                <td>🥈 2º</td>
+                                <td>Canada</td>
+                                <td><strong>8</strong></td>
+                            </tr>
+                            <tr>
+                                <td>🥉 3º</td>
+                                <td>France</td>
+                                <td><strong>5</strong></td>
+                            </tr>
+                            <tr>
+                                <td>4️⃣ 4º</td>
+                                <td>Brazil</td>
+                                <td><strong>5</strong></td>
+                            </tr>
+                            <tr>
+                                <td>5️⃣ 5º</td>
+                                <td>Germany</td>
+                                <td><strong>4</strong></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="section">
+                <h2>🔤 Países com Exatamente 6 Letras</h2>
+                <div class="info-box">
+                    <p><strong>Países encontrados:</strong> Brazil, Canada, France, Norway, Poland, Sweden</p>
+                </div>
+            </div>
+            <div class="section">
+                <h2>💿 Álbum Mais Tocado por País</h2>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>País</th>
+                                <th>Álbum</th>
+                                <th>Artista</th>
+                                <th>Total Tocadas</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>USA</td>
+                                <td><strong>The Office, Season 3</strong></td>
+                                <td>The Office</td>
+                                <td><strong>14</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Canada</td>
+                                <td><strong>Arquivo II</strong></td>
+                                <td>Os Paralamas Do Sucesso</td>
+                                <td><strong>9</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Brazil</td>
+                                <td><strong>Use Your Illusion I</strong></td>
+                                <td>Guns N' Roses</td>
+                                <td><strong>7</strong></td>
+                            </tr>
+                            <tr>
+                                <td>France</td>
+                                <td><strong>Minha Historia</strong></td>
+                                <td>Chico Buarque</td>
+                                <td><strong>7</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Ireland</td>
+                                <td><strong>Lost, Season 2</strong></td>
+                                <td>Lost</td>
+                                <td><strong>7</strong></td>
+                            </tr>
+                            <tr>
+                                <td>India</td>
+                                <td><strong>Up An' Atom</strong></td>
+                                <td>Gene Krupa</td>
+                                <td><strong>6</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Czech Republic</td>
+                                <td><strong>Prenda Minha</strong></td>
+                                <td>Caetano Veloso</td>
+                                <td><strong>5</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Finland</td>
+                                <td><strong>Greatest Kiss</strong></td>
+                                <td>Kiss</td>
+                                <td><strong>5</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Germany</td>
+                                <td><strong>Djavan Ao Vivo - Vol. 1</strong></td>
+                                <td>Djavan</td>
+                                <td><strong>5</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Spain</td>
+                                <td><strong>My Generation - The Very Best Of The Who</strong></td>
+                                <td>The Who</td>
+                                <td><strong>5</strong></td>
+                            </tr>
+                            <tr>
+                                <td>United Kingdom</td>
+                                <td><strong>No Prayer For The Dying</strong></td>
+                                <td>Iron Maiden</td>
+                                <td><strong>5</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Argentina</td>
+                                <td><strong>Acústico</strong></td>
+                                <td>Titãs</td>
+                                <td><strong>4</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Australia</td>
+                                <td><strong>The X Factor</strong></td>
+                                <td>Iron Maiden</td>
+                                <td><strong>4</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Austria</td>
+                                <td><strong>My Generation - The Very Best Of The Who</strong></td>
+                                <td>The Who</td>
+                                <td><strong>4</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Belgium</td>
+                                <td><strong>Big Ones</strong></td>
+                                <td>Aerosmith</td>
+                                <td><strong>4</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Denmark</td>
+                                <td><strong>Chronicle, Vol. 1</strong></td>
+                                <td>Creedence Clearwater Revival</td>
+                                <td><strong>4</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Hungary</td>
+                                <td><strong>Pop</strong></td>
+                                <td>U2</td>
+                                <td><strong>4</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Italy</td>
+                                <td><strong>Acústico</strong></td>
+                                <td>Titãs</td>
+                                <td><strong>4</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Netherlands</td>
+                                <td><strong>In Step</strong></td>
+                                <td>Stevie Ray Vaughan & Double Trouble</td>
+                                <td><strong>4</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Norway</td>
+                                <td><strong>For Those About To Rock We Salute You</strong></td>
+                                <td>AC/DC</td>
+                                <td><strong>4</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Poland</td>
+                                <td><strong>Rattle And Hum</strong></td>
+                                <td>U2</td>
+                                <td><strong>4</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Portugal</td>
+                                <td><strong>Raul Seixas</strong></td>
+                                <td>Raul Seixas</td>
+                                <td><strong>4</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Sweden</td>
+                                <td><strong>Volume Dois</strong></td>
+                                <td>Titãs</td>
+                                <td><strong>4</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Chile</td>
+                                <td><strong>My Way: The Best Of Frank Sinatra [Disc 1]</strong></td>
+                                <td>Frank Sinatra</td>
+                                <td><strong>3</strong></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="section">
+                <h2>🎤 Artista Mais Tocado por País</h2>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>País</th>
+                                <th>Artista</th>
+                                <th>Total Tocadas</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>USA</td>
+                                <td><strong>Iron Maiden</strong></td>
+                                <td><strong>34</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Australia</td>
+                                <td><strong>Iron Maiden</strong></td>
+                                <td><strong>18</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Canada</td>
+                                <td><strong>Os Paralamas Do Sucesso</strong></td>
+                                <td><strong>16</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Portugal</td>
+                                <td><strong>Iron Maiden</strong></td>
+                                <td><strong>16</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Germany</td>
+                                <td><strong>Iron Maiden</strong></td>
+                                <td><strong>14</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Brazil</td>
+                                <td><strong>Os Paralamas Do Sucesso</strong></td>
+                                <td><strong>11</strong></td>
+                            </tr>
+                            <tr>
+                                <td>France</td>
+                                <td><strong>Creedence Clearwater Revival</strong></td>
+                                <td><strong>11</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Austria</td>
+                                <td><strong>U2</strong></td>
+                                <td><strong>9</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Belgium</td>
+                                <td><strong>Faith No More</strong></td>
+                                <td><strong>9</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Czech Republic</td>
+                                <td><strong>Iron Maiden</strong></td>
+                                <td><strong>9</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Norway</td>
+                                <td><strong>Led Zeppelin</strong></td>
+                                <td><strong>9</strong></td>
+                            </tr>
+                            <tr>
+                                <td>United Kingdom</td>
+                                <td><strong>Metallica</strong></td>
+                                <td><strong>9</strong></td>
+                            </tr>
+                            <tr>
+                                <td>India</td>
+                                <td><strong>Iron Maiden</strong></td>
+                                <td><strong>8</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Ireland</td>
+                                <td><strong>Lost</strong></td>
+                                <td><strong>8</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Denmark</td>
+                                <td><strong>Creedence Clearwater Revival</strong></td>
+                                <td><strong>7</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Argentina</td>
+                                <td><strong>Metallica</strong></td>
+                                <td><strong>6</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Chile</td>
+                                <td><strong>Led Zeppelin</strong></td>
+                                <td><strong>6</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Finland</td>
+                                <td><strong>Van Halen</strong></td>
+                                <td><strong>6</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Netherlands</td>
+                                <td><strong>Red Hot Chili Peppers</strong></td>
+                                <td><strong>6</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Poland</td>
+                                <td><strong>U2</strong></td>
+                                <td><strong>6</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Spain</td>
+                                <td><strong>Pearl Jam</strong></td>
+                                <td><strong>6</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Hungary</td>
+                                <td><strong>Jamiroquai</strong></td>
+                                <td><strong>5</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Italy</td>
+                                <td><strong>Faith No More</strong></td>
+                                <td><strong>5</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Sweden</td>
+                                <td><strong>Titãs</strong></td>
+                                <td><strong>5</strong></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="section">
+                <h2>🇧🇷 Músicas Compradas por Clientes Brasileiros</h2>
+                <div class="highlight">
+                    <p><strong>Total de músicas únicas:</strong> 190</p>
+                    <p>Mostrando as primeiras 20 músicas:</p>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Artista</th>
+                                <th>Música</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>AC/DC</strong></td>
+                                <td>Go Down</td>
+                            </tr>
+                            <tr>
+                                <td><strong>AC/DC</strong></td>
+                                <td>Hell Ain't A Bad Place To Be</td>
+                            </tr>
+                            <tr>
+                                <td><strong>AC/DC</strong></td>
+                                <td>Snowballed</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Academy of St. Martin in the Fields & Sir Neville Marriner</strong></td>
+                                <td>Fantasia On Greensleeves</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Academy of St. Martin in the Fields, Sir Neville Marriner & Thurston Dart</strong></td>
+                                <td>Suite No. 3 in D, BWV 1068: III. Gavotte I & II</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Accept</strong></td>
+                                <td>Fast As a Shark</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Amy Winehouse</strong></td>
+                                <td>Help Yourself</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Battlestar Galactica (Classic)</strong></td>
+                                <td>Experiment In Terra</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Battlestar Galactica (Classic)</strong></td>
+                                <td>Take the Celestra</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Berliner Philharmoniker & Hans Rosbaud</strong></td>
+                                <td>Karelia Suite, Op.11: 2. Ballade (Tempo Di Menuetto)</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Chico Buarque</strong></td>
+                                <td>Meu Caro Amigo</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Chico Buarque</strong></td>
+                                <td>Morena De Angola</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Chico Buarque</strong></td>
+                                <td>O Leaozinho</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Chico Buarque</strong></td>
+                                <td>Vai Passar</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Chico Buarque</strong></td>
+                                <td>Voce Nao Entende Nada - Cotidiano</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Chico Science & Nação Zumbi</strong></td>
+                                <td>Amor De Muito</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Chico Science & Nação Zumbi</strong></td>
+                                <td>Banditismo Por Uma Questa</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Chico Science & Nação Zumbi</strong></td>
+                                <td>Interlude Zumbi</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Chico Science & Nação Zumbi</strong></td>
+                                <td>Lixo Do Mangue</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Chico Science & Nação Zumbi</strong></td>
+                                <td>Maracatu De Tiro Certeiro</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="info-box">
+                    <p><em>... e mais 170 músicas não mostradas aqui.</em></p>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>📈 Relatório gerado automaticamente • 16/09/2025 às 10:48</p>
+            <p>Análise completa do banco de dados disco.db</p>
+        </div>
+    </div>
+</body>
+</html>

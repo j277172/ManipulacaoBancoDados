@@ -1,0 +1,290 @@
+---
+title: "Desafio 6 - Joao Garcua 277172"
+format: html
+editor: visual
+---
+
+```{r}
+
+# Carregar bibliotecas necessárias
+library(dplyr)
+library(RSQLite)
+
+cat("\n========================================\n")
+cat("    ANÁLISE DO BANCO DE DADOS disco.db\n")
+cat("========================================\n\n")
+
+# 1. Baixar o arquivo disco.db e armazenar o caminho completo
+path <- getwd()
+cat("1. CAMINHO DO ARQUIVO:\n")
+cat("   Diretório atual:", path, "\n")
+
+# 2. Utilizar file.path() para combinar path com nome do arquivo
+fname <- file.path(path, "disco.db")
+cat("   Caminho completo do arquivo:", fname, "\n\n")
+
+# Verificar se o arquivo existe
+if(file.exists(fname)) {
+  cat("✓ Arquivo disco.db encontrado!\n\n")
+} else {
+  cat("⚠ AVISO: Arquivo disco.db não encontrado no diretório atual\n")
+  cat("  Por favor, baixe o arquivo disco.db para o diretório atual\n\n")
+}
+
+# 3. Conectar ao banco de dados SQLite
+conn <- dbConnect(SQLite(), fname)
+cat("2. CONEXÃO COM O BANCO:\n")
+cat("✓ Conexão estabelecida com sucesso!\n\n")
+
+# 4. Listar as tabelas existentes no banco de dados
+tabelas <- dbListTables(conn)
+cat("3. TABELAS EXISTENTES NO BANCO:\n")
+for(i in 1:length(tabelas)) {
+  cat("  ", i, ".", tabelas[i], "\n")
+}
+cat("\n")
+
+# 5. Identificar os nomes de todas as colunas existentes na tabela customers
+cat("4. COLUNAS DA TABELA CUSTOMERS:\n")
+if("customers" %in% tabelas) {
+  colunas_customers <- dbListFields(conn, "customers")
+  for(i in 1:length(colunas_customers)) {
+    cat("  ", i, ".", colunas_customers[i], "\n")
+  }
+} else {
+  cat("  ⚠ Tabela customers não encontrada\n")
+}
+cat("\n")
+
+# 6. Identificar quantos clientes estão cadastrados (usando apenas SQLite)
+cat("5. TOTAL DE CLIENTES CADASTRADOS:\n")
+query_total_clientes <- "SELECT COUNT(*) as total_clientes FROM customers"
+total_clientes <- dbGetQuery(conn, query_total_clientes)
+cat("   Resposta:", total_clientes$total_clientes, "clientes\n\n")
+
+# 7. Identificar número de países diferentes (usando apenas SQLite)
+cat("6. NÚMERO DE PAÍSES DIFERENTES:\n")
+query_paises_distintos <- "SELECT COUNT(DISTINCT Country) as total_paises FROM customers"
+total_paises <- dbGetQuery(conn, query_paises_distintos)
+cat("   Resposta:", total_paises$total_paises, "países distintos\n\n")
+
+# 8. Quantos clientes existem por país, ordenado decrescente (usando apenas SQLite)
+cat("7. CLIENTES POR PAÍS (ORDENADO DECRESCENTE):\n")
+query_clientes_por_pais <- "
+SELECT Country as pais, COUNT(*) as quantidade_clientes
+FROM customers
+GROUP BY Country
+ORDER BY quantidade_clientes DESC
+"
+clientes_por_pais <- dbGetQuery(conn, query_clientes_por_pais)
+cat("   País                    | Qtd Clientes\n")
+cat("   -------------------------|-------------\n")
+for(i in 1:nrow(clientes_por_pais)) {
+  pais_formatado <- sprintf("%-24s", clientes_por_pais$pais[i])
+  cat("  ", pais_formatado, "|", sprintf("%11d", clientes_por_pais$quantidade_clientes[i]), "\n")
+}
+cat("\n")
+
+# 9. Top 5 países com mais clientes (usando apenas SQLite)
+cat("8. TOP 5 PAÍSES COM MAIS CLIENTES:\n")
+query_top5_paises <- "
+SELECT Country as pais, COUNT(*) as quantidade_clientes
+FROM customers
+GROUP BY Country
+ORDER BY quantidade_clientes DESC
+LIMIT 5
+"
+top5_paises <- dbGetQuery(conn, query_top5_paises)
+cat("   Posição | País                    | Qtd Clientes\n")
+cat("   --------|-------------------------|-------------\n")
+for(i in 1:nrow(top5_paises)) {
+  pais_formatado <- sprintf("%-24s", top5_paises$pais[i])
+  cat("      ", i, "    |", pais_formatado, "|", sprintf("%11d", top5_paises$quantidade_clientes[i]), "\n")
+}
+cat("\n")
+
+# 10. Países com exatamente 6 letras no nome
+cat("9. PAÍSES COM EXATAMENTE 6 LETRAS:\n")
+query_paises_6_letras <- "
+SELECT DISTINCT Country as pais
+FROM customers
+WHERE LENGTH(Country) = 6
+ORDER BY Country
+"
+paises_6_letras <- dbGetQuery(conn, query_paises_6_letras)
+if(nrow(paises_6_letras) > 0) {
+  for(i in 1:nrow(paises_6_letras)) {
+    cat("  ", i, ".", paises_6_letras$pais[i], "(", nchar(paises_6_letras$pais[i]), "letras)\n")
+  }
+} else {
+  cat("   Nenhum país encontrado com exatamente 6 letras\n")
+}
+cat("\n")
+
+# 11. Músicas compradas por clientes brasileiros
+cat("10. MÚSICAS COMPRADAS POR CLIENTES BRASILEIROS:\n")
+query_musicas_brasil <- "
+SELECT DISTINCT t.Name as nome_musica, ar.Name as artista
+FROM customers c
+JOIN invoices i ON c.CustomerId = i.CustomerId
+JOIN invoice_items ii ON i.InvoiceId = ii.InvoiceId  
+JOIN tracks t ON ii.TrackId = t.TrackId
+JOIN albums al ON t.AlbumId = al.AlbumId
+JOIN artists ar ON al.ArtistId = ar.ArtistId
+WHERE c.Country = 'Brazil'
+ORDER BY ar.Name, t.Name
+"
+
+# Verificar se as tabelas necessárias existem antes de executar
+tabelas_necessarias <- c("customers", "invoices", "invoice_items", "tracks", "albums", "artists")
+tabelas_existem <- all(tabelas_necessarias %in% tabelas)
+
+if(tabelas_existem) {
+  musicas_brasil <- dbGetQuery(conn, query_musicas_brasil)
+  if(nrow(musicas_brasil) > 0) {
+    cat("   Total de músicas únicas:", nrow(musicas_brasil), "\n")
+    cat("   \n   Primeiras 20 músicas:\n")
+    cat("   Artista                          | Música\n")
+    cat("   ---------------------------------|----------------------------------\n")
+
+    limite <- min(20, nrow(musicas_brasil))
+    for(i in 1:limite) {
+      artista_formatado <- sprintf("%-32s", substr(musicas_brasil$artista[i], 1, 32))
+      musica_formatada <- substr(musicas_brasil$nome_musica[i], 1, 33)
+      cat("  ", artista_formatado, "|", musica_formatada, "\n")
+    }
+
+    if(nrow(musicas_brasil) > 20) {
+      cat("   ... e mais", nrow(musicas_brasil) - 20, "músicas\n")
+    }
+  } else {
+    cat("   Nenhuma música encontrada para clientes brasileiros\n")
+  }
+} else {
+  cat("   ⚠ Nem todas as tabelas necessárias foram encontradas:\n")
+  cat("   Tabelas necessárias:", paste(tabelas_necessarias, collapse = ", "), "\n")
+  cat("   Tabelas encontradas:", paste(tabelas, collapse = ", "), "\n")
+}
+cat("\n")
+
+# 12. NOVO: Álbum mais tocado por país
+cat("11. ÁLBUM MAIS TOCADO POR PAÍS:\n")
+query_album_mais_tocado <- "
+WITH album_por_pais AS (
+  SELECT 
+    c.Country as pais,
+    al.Title as album,
+    ar.Name as artista,
+    COUNT(*) as total_tocadas,
+    ROW_NUMBER() OVER (PARTITION BY c.Country ORDER BY COUNT(*) DESC) as ranking
+  FROM customers c
+  JOIN invoices i ON c.CustomerId = i.CustomerId
+  JOIN invoice_items ii ON i.InvoiceId = ii.InvoiceId  
+  JOIN tracks t ON ii.TrackId = t.TrackId
+  JOIN albums al ON t.AlbumId = al.AlbumId
+  JOIN artists ar ON al.ArtistId = ar.ArtistId
+  GROUP BY c.Country, al.AlbumId, al.Title, ar.Name
+)
+SELECT pais, album, artista, total_tocadas
+FROM album_por_pais 
+WHERE ranking = 1
+ORDER BY total_tocadas DESC, pais
+"
+
+if(tabelas_existem) {
+  album_mais_tocado <- dbGetQuery(conn, query_album_mais_tocado)
+  if(nrow(album_mais_tocado) > 0) {
+    cat("   País                     | Álbum                           | Artista                  | Tocadas\n")
+    cat("   -------------------------|--------------------------------|--------------------------|--------\n")
+
+    for(i in 1:nrow(album_mais_tocado)) {
+      pais_formatado <- sprintf("%-24s", substr(album_mais_tocado$pais[i], 1, 24))
+      album_formatado <- sprintf("%-30s", substr(album_mais_tocado$album[i], 1, 30))
+      artista_formatado <- sprintf("%-24s", substr(album_mais_tocado$artista[i], 1, 24))
+      cat("  ", pais_formatado, "|", album_formatado, "|", artista_formatado, "|", 
+          sprintf("%7d", album_mais_tocado$total_tocadas[i]), "\n")
+    }
+  } else {
+    cat("   Nenhum resultado encontrado\n")
+  }
+} else {
+  cat("   ⚠ Tabelas necessárias não encontradas\n")
+}
+cat("\n")
+
+# 13. NOVO: Artista mais tocado por país
+cat("12. ARTISTA MAIS TOCADO POR PAÍS:\n")
+query_artista_mais_tocado <- "
+WITH artista_por_pais AS (
+  SELECT 
+    c.Country as pais,
+    ar.Name as artista,
+    COUNT(*) as total_tocadas,
+    ROW_NUMBER() OVER (PARTITION BY c.Country ORDER BY COUNT(*) DESC) as ranking
+  FROM customers c
+  JOIN invoices i ON c.CustomerId = i.CustomerId
+  JOIN invoice_items ii ON i.InvoiceId = ii.InvoiceId  
+  JOIN tracks t ON ii.TrackId = t.TrackId
+  JOIN albums al ON t.AlbumId = al.AlbumId
+  JOIN artists ar ON al.ArtistId = ar.ArtistId
+  GROUP BY c.Country, ar.ArtistId, ar.Name
+)
+SELECT pais, artista, total_tocadas
+FROM artista_por_pais 
+WHERE ranking = 1
+ORDER BY total_tocadas DESC, pais
+"
+
+if(tabelas_existem) {
+  artista_mais_tocado <- dbGetQuery(conn, query_artista_mais_tocado)
+  if(nrow(artista_mais_tocado) > 0) {
+    cat("   País                     | Artista                                    | Tocadas\n")
+    cat("   -------------------------|--------------------------------------------|---------\n")
+
+    for(i in 1:nrow(artista_mais_tocado)) {
+      pais_formatado <- sprintf("%-24s", substr(artista_mais_tocado$pais[i], 1, 24))
+      artista_formatado <- sprintf("%-42s", substr(artista_mais_tocado$artista[i], 1, 42))
+      cat("  ", pais_formatado, "|", artista_formatado, "|", 
+          sprintf("%8d", artista_mais_tocado$total_tocadas[i]), "\n")
+    }
+  } else {
+    cat("   Nenhum resultado encontrado\n")
+  }
+} else {
+  cat("   ⚠ Tabelas necessárias não encontradas\n")
+}
+cat("\n")
+
+# 14. Desconectar do banco de dados
+dbDisconnect(conn)
+cat("13. DESCONEXÃO DO BANCO:\n")
+cat("✓ Conexão encerrada com sucesso!\n\n")
+
+cat("========================================\n")
+cat("         RESUMO DAS OPERAÇÕES\n")
+cat("========================================\n")
+cat("✓ 1.  Caminho do arquivo armazenado em 'path'\n")
+cat("✓ 2.  Caminho completo armazenado em 'fname'\n")  
+cat("✓ 3.  Conexão estabelecida e armazenada em 'conn'\n")
+cat("✓ 4.  Tabelas listadas\n")
+cat("✓ 5.  Colunas da tabela customers identificadas\n")
+cat("✓ 6.  Total de clientes contado\n")
+cat("✓ 7.  Países distintos contados\n")
+cat("✓ 8.  Clientes por país listados\n")
+cat("✓ 9.  Top 5 países identificados\n")
+cat("✓ 10. Países com 6 letras listados\n")
+cat("✓ 11. Músicas de clientes brasileiros consultadas\n")
+cat("✓ 12. Álbum mais tocado por país identificado\n")
+cat("✓ 13. Artista mais tocado por país identificado\n")
+cat("✓ 14. Conexão encerrada\n")
+cat("========================================\n")
+
+# Variáveis importantes criadas:
+cat("\nVARIÁVEIS IMPORTANTES CRIADAS:\n")
+cat("- path: Diretório atual\n")
+cat("- fname: Caminho completo do arquivo disco.db\n")
+cat("- conn: Conexão com o banco (já desconectada)\n")
+cat("- album_mais_tocado: DataFrame com álbum mais tocado por país\n")
+cat("- artista_mais_tocado: DataFrame com artista mais tocado por país\n")
+
+```
