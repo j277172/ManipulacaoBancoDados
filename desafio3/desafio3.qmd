@@ -1,0 +1,285 @@
+---
+title: "Dashboard Petrobras (PBR) - R Quarto HTML"
+format: 
+  html:
+    theme: flatly
+    toc: true
+    toc-location: left
+    code-fold: true
+    code-summary: "Mostrar código"
+    embed-resources: true
+execute:
+  echo: true
+  warning: false
+  message: false
+editor: source
+---
+
+# Dashboard Financeiro Petrobras (PBR)
+
+```{r setup}
+# Instalação automática de pacotes ausentes
+pkgs <- c(
+  "arrow", "jsonlite", "BatchGetSymbols", "ggplot2", "tsibble",
+  "dplyr", "lubridate", "DT", "scales", "glue", "plotly"
+)
+to_install <- pkgs[!pkgs %in% installed.packages()[, "Package"]]
+if (length(to_install) > 0) install.packages(to_install, quiet = TRUE)
+
+# Carregamento de bibliotecas
+library(arrow)
+library(jsonlite)
+library(BatchGetSymbols)
+library(ggplot2)
+library(tsibble)
+library(dplyr)
+library(lubridate)
+library(DT)
+library(scales)
+library(glue)
+library(plotly)
+```
+
+## Coleta e Preparação dos Dados
+
+```{r data-collection}
+# Parâmetros de coleta
+tickers <- "PBR"  # Petrobras (NYSE)
+first_date <- as.Date("2020-01-01")
+last_date <- Sys.Date() - 1
+
+# Download de dados via BatchGetSymbols (Yahoo Finance)
+dados_bolsa <- BatchGetSymbols(
+  tickers = tickers,
+  first.date = first_date,
+  last.date = last_date,
+  thresh.bad.data = 0.01,
+  do.cache = TRUE
+)
+
+# Preparação do dataset
+dados <- dados_bolsa$df.tickers %>%
+  select(
+    Date = ref.date,
+    Open = price.open,
+    High = price.high,
+    Low = price.low,
+    Close = price.close,
+    Volume = volume,
+    Ticker = ticker
+  ) %>%
+  arrange(Date)
+
+# Salvamento em Parquet e JSON
+write_parquet(dados, "acao.parquet")
+write_json(dados, "acao.json", dataframe = "rows", pretty = TRUE)
+
+# Conversão para tsibble
+df_parquet <- read_parquet("acao.parquet") %>%
+  mutate(Date = as.Date(Date)) %>%
+  as_tsibble(index = Date, key = Ticker)
+
+df_json <- fromJSON("acao.json") %>%
+  mutate(Date = as.Date(Date)) %>%
+  as_tsibble(index = Date, key = Ticker)
+```
+
+## Cálculos Financeiros
+
+```{r calculations}
+# Cálculo de retornos diários
+retornos <- df_parquet %>%
+  arrange(Date) %>%
+  mutate(Retorno = (Close / lag(Close)) - 1) %>%
+  filter(!is.na(Retorno))
+
+# Estatísticas descritivas
+estatisticas <- df_parquet %>%
+  as_tibble() %>%
+  summarise(
+    across(c(Open, High, Low, Close, Volume), 
+           list(min = ~min(.x, na.rm=TRUE),
+                q1 = ~quantile(.x, 0.25, na.rm=TRUE),
+                median = ~median(.x, na.rm=TRUE),
+                mean = ~mean(.x, na.rm=TRUE),
+                q3 = ~quantile(.x, 0.75, na.rm=TRUE),
+                max = ~max(.x, na.rm=TRUE)),
+           .names = "{.col}_{.fn}")
+  )
+
+# Dados mais recentes
+ultimo <- df_parquet %>%
+  as_tibble() %>%
+  arrange(desc(Date)) %>%
+  slice(1)
+
+# Retorno mais recente
+ret_1d <- retornos %>%
+  as_tibble() %>%
+  arrange(desc(Date)) %>%
+  slice(1) %>%
+  pull(Retorno)
+
+# Retorno Year-to-Date (YTD)
+ytd_start <- as.Date(paste0(year(last_date), "-01-01"))
+ytd_data <- df_parquet %>%
+  filter(Date >= ytd_start) %>%
+  as_tibble()
+
+ret_ytd <- if (nrow(ytd_data) >= 2) {
+  first_close <- ytd_data %>% arrange(Date) %>% slice(1) %>% pull(Close)
+  last_close <- ytd_data %>% arrange(desc(Date)) %>% slice(1) %>% pull(Close)
+  (last_close/first_close) - 1
+} else NA_real_
+
+# Função auxiliar para formatação de percentuais
+pct <- function(x) ifelse(is.na(x), "NA", paste0(sprintf("%.2f", 100*x), "%"))
+```
+
+## Resumo Executivo
+
+::: callout-note
+**Período analisado:** `r format(first_date, "%d/%m/%Y")` a `r format(last_date, "%d/%m/%Y")`\
+**Ticker:** `r tickers` (Petrobras - NYSE)\
+**Último fechamento:** `r dollar(ultimo$Close)` em `r format(ultimo$Date, "%d/%m/%Y")`\
+**Retorno 1 dia:** `r pct(ret_1d)`\
+**Retorno YTD:** `r pct(ret_ytd)`
+:::
+
+## Visualizações
+
+### Evolução dos Preços
+
+```{r price-chart}
+p1 <- ggplot(as_tibble(df_parquet), aes(x = Date, y = Close)) +
+  geom_ribbon(aes(ymin = Low, ymax = High), alpha = 0.2, fill = "gray") +
+  geom_line(color = "steelblue", linewidth = 0.8) +
+  labs(
+    title = paste("Preços da", unique(df_parquet$Ticker), "- até", format(last_date, "%d/%m/%Y")),
+    subtitle = "Linha: Preço de Fechamento | Área: Variação entre Mínima e Máxima",
+    x = "Data",
+    y = "Preço (USD)",
+    caption = "Fonte: Yahoo Finance via BatchGetSymbols"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold"))
+
+ggplotly(p1)
+```
+
+### Volume de Negociação
+
+```{r volume-chart}
+p2 <- ggplot(as_tibble(df_parquet), aes(x = Date, y = Volume)) +
+  geom_col(fill = "orange", alpha = 0.7) +
+  labs(
+    title = paste("Volume negociado da", unique(df_parquet$Ticker), "- até", format(last_date, "%d/%m/%Y")),
+    x = "Data",
+    y = "Volume",
+    caption = "Fonte: Yahoo Finance via BatchGetSymbols"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold"))
+
+ggplotly(p2)
+```
+
+### Retornos Diários
+
+```{r returns-chart}
+p3 <- ggplot(as_tibble(retornos), aes(x = Date, y = Retorno, fill = Retorno > 0)) +
+  geom_col() +
+  scale_y_continuous(labels = percent_format()) +
+  scale_fill_manual(values = c("red", "green"), guide = "none") +
+  labs(
+    title = paste("Retornos Diários da", unique(df_parquet$Ticker), "- até", format(last_date, "%d/%m/%Y")),
+    x = "Data",
+    y = "Retorno",
+    caption = "Fonte: Yahoo Finance via BatchGetSymbols"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold"))
+
+ggplotly(p3)
+```
+
+### Distribuição dos Retornos
+
+```{r histogram}
+p4 <- ggplot(as_tibble(retornos), aes(x = Retorno)) +
+  geom_histogram(bins = 50, fill = "#ffa600", color = "white", alpha = 0.7) +
+  scale_x_continuous(labels = percent_format()) +
+  labs(
+    title = "Distribuição dos Retornos Diários",
+    x = "Retorno Diário",
+    y = "Frequência"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold"))
+
+ggplotly(p4)
+```
+
+## Tabelas de Dados
+
+### Estatísticas Descritivas
+
+```{r stats-table}
+datatable(
+  round(as.data.frame(estatisticas), 4),
+  options = list(scrollX = TRUE, pageLength = 5),
+  caption = "Estatísticas descritivas para todos os preços e volume"
+) %>%
+  formatStyle(columns = colnames(estatisticas), fontSize = '12px')
+```
+
+### Dados Recentes (Parquet)
+
+```{r recent-data-parquet}
+datatable(
+  as_tibble(df_parquet) %>% 
+  arrange(desc(Date)) %>% 
+  head(100),
+  options = list(scrollX = TRUE, pageLength = 10),
+  caption = "Dados mais recentes carregados do arquivo Parquet"
+) %>%
+  formatCurrency(c('Open', 'High', 'Low', 'Close'), '$') %>%
+  formatStyle(columns = c('Open', 'High', 'Low', 'Close', 'Volume'), fontSize = '11px')
+```
+
+### Dados Recentes (JSON)
+
+```{r recent-data-json}
+datatable(
+  as_tibble(df_json) %>% 
+  arrange(desc(Date)) %>% 
+  head(100),
+  options = list(scrollX = TRUE, pageLength = 10),
+  caption = "Dados mais recentes carregados do arquivo JSON"
+) %>%
+  formatCurrency(c('Open', 'High', 'Low', 'Close'), '$') %>%
+  formatStyle(columns = c('Open', 'High', 'Low', 'Close', 'Volume'), fontSize = '11px')
+```
+
+## Análise de Retornos
+
+### Retornos Mais Recentes
+
+```{r recent-returns}
+datatable(
+  as_tibble(retornos) %>% 
+  arrange(desc(Date)) %>% 
+  head(50) %>%
+  mutate(Retorno_pct = paste0(sprintf("%.2f", 100*Retorno), "%")),
+  options = list(scrollX = TRUE, pageLength = 10),
+  caption = "Retornos diários mais recentes"
+) %>%
+  formatStyle(
+    'Retorno',
+    backgroundColor = styleInterval(0, c('#ffcccc', '#ccffcc'))
+  )
+```
+
+------------------------------------------------------------------------
+
+*Dashboard gerado em `r format(Sys.time(), "%d/%m/%Y às %H:%M:%S")` com dados até `r format(last_date, "%d/%m/%Y")`*
