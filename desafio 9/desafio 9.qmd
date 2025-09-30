@@ -1,0 +1,180 @@
+---
+title: "Untitled"
+format: html
+editor: visual
+embed-resources: true
+---
+
+```{r}
+# Projeto de Banco de Dados de Voos - VERSÃO CORRIGIDA
+# Autor: RA277172
+# Data de compilação: 
+cat("Arquivo compilado em:", format(Sys.time(), "%d/%m/%Y às %H:%M:%S"), "\n\n")
+
+# Carregando bibliotecas necessárias
+library(DBI)
+library(RSQLite)
+library(readr)
+library(dplyr)
+
+# ========================================
+# 1. Criando o banco de dados SQLite
+# ========================================
+
+# Conectando ao banco de dados (cria se não existir)
+con <- dbConnect(RSQLite::SQLite(), "voos.sqlite3")
+
+cat("Banco de dados 'voos.sqlite3' criado/conectado com sucesso!\n")
+
+# ========================================
+# 2. Lendo e inserindo dados das companhias aéreas e aeroportos
+# ========================================
+
+# Lendo arquivo airlines.csv
+airlines_data <- read_csv("airlines.csv", show_col_types = FALSE)
+cat("Arquivo airlines.csv lido com", nrow(airlines_data), "registros\n")
+
+# Inserindo na tabela airlines
+dbWriteTable(con, "airlines", airlines_data, overwrite = TRUE)
+cat("Tabela 'airlines' criada no banco de dados\n")
+
+# Lendo arquivo airports.csv
+airports_data <- read_csv("airports.csv", show_col_types = FALSE)
+cat("Arquivo airports.csv lido com", nrow(airports_data), "registros\n")
+
+# Inserindo na tabela airports
+dbWriteTable(con, "airports", airports_data, overwrite = TRUE)
+cat("Tabela 'airports' criada no banco de dados\n")
+
+# ========================================
+# 3. Função lerDados para processar voos por chunks
+# ========================================
+
+lerDados <- function(input, pos) {
+  # Exibindo mensagem de progresso
+  message("Leitura atingiu a linha ", pos)
+  
+  # Definindo os aeroportos de interesse
+  aeroportos_interesse <- c("BWI", "MIA", "SEA", "SFO", "JFK")
+  
+  # Selecionando apenas as colunas de interesse
+  colunas_interesse <- c("YEAR", "MONTH", "DAY", "AIRLINE", "FLIGHT_NUMBER", 
+                        "ORIGIN_AIRPORT", "DESTINATION_AIRPORT", "ARRIVAL_DELAY")
+  
+  # Verificando quais colunas existem no input e selecionando apenas as disponíveis
+  colunas_disponiveis <- intersect(colunas_interesse, names(input))
+  
+  # Selecionando colunas e filtrando voos
+  voos_processados <- input %>%
+    select(all_of(colunas_disponiveis)) %>%
+    filter(ORIGIN_AIRPORT %in% aeroportos_interesse | 
+           DESTINATION_AIRPORT %in% aeroportos_interesse)
+  
+  # Se há dados filtrados, inserir no banco
+  if (nrow(voos_processados) > 0) {
+    # Usando append = TRUE para adicionar ao final da tabela
+    dbWriteTable(con, "flights", voos_processados, append = TRUE)
+  }
+  
+  # A função não retorna nada (side effect only)
+  invisible(NULL)
+}
+
+# ========================================
+# 4. Lendo arquivo flights.csv com callback
+# ========================================
+
+cat("\nIniciando leitura do arquivo flights.csv...\n")
+
+# Criando a tabela flights vazia primeiro (para evitar erros)
+if (dbExistsTable(con, "flights")) {
+  dbRemoveTable(con, "flights")
+}
+
+# Lendo o arquivo com chunks de 100,000 registros
+# CORREÇÃO: read_csv_chunked não suporta col_select diretamente
+# A seleção de colunas será feita dentro da função lerDados
+read_csv_chunked(
+  file = "flights.csv",
+  callback = SideEffectChunkCallback$new(lerDados),
+  chunk_size = 100000,
+  show_col_types = FALSE
+)
+
+cat("Leitura do arquivo flights.csv concluída!\n")
+
+# ========================================
+# 5. Consulta SQL para análise de atrasos
+# ========================================
+
+cat("\nExecutando consulta SQL para análise de atrasos...\n")
+
+# Query SQL para obter tempo médio de atraso por aeroporto de destino
+query_sql <- "
+SELECT 
+    ROUND(AVG(f.ARRIVAL_DELAY), 2) as tempo_medio_atraso,
+    f.DESTINATION_AIRPORT as sigla_aeroporto,
+    ap.AIRPORT as nome_completo_aeroporto,
+    al.AIRLINE as nome_completo_companhia
+FROM flights f
+LEFT JOIN airports ap ON f.DESTINATION_AIRPORT = ap.IATA_CODE
+LEFT JOIN airlines al ON f.AIRLINE = al.IATA_CODE
+WHERE f.ARRIVAL_DELAY IS NOT NULL
+GROUP BY f.DESTINATION_AIRPORT, ap.AIRPORT, al.AIRLINE
+ORDER BY tempo_medio_atraso DESC
+"
+
+# Executando a consulta
+resultado <- dbGetQuery(con, query_sql)
+
+# Exibindo os resultados
+cat("\n=== RESULTADO DA ANÁLISE DE ATRASOS ===\n")
+print(resultado)
+
+# Salvando resultado em CSV para referência
+write_csv(resultado, "analise_atrasos_aeroportos.csv")
+cat("\nResultado salvo em 'analise_atrasos_aeroportos.csv'\n")
+
+# ========================================
+# 6. Informações adicionais do banco
+# ========================================
+
+cat("\n=== INFORMAÇÕES DO BANCO DE DADOS ===\n")
+
+# Listando tabelas criadas
+tabelas <- dbListTables(con)
+cat("Tabelas criadas:", paste(tabelas, collapse = ", "), "\n")
+
+# Contagem de registros por tabela
+for (tabela in tabelas) {
+  count_query <- paste("SELECT COUNT(*) as total FROM", tabela)
+  count_result <- dbGetQuery(con, count_query)
+  cat("Tabela", tabela, ":", count_result$total, "registros\n")
+}
+
+# ========================================
+# 7. Verificação das colunas da tabela flights
+# ========================================
+
+# Verificando estrutura da tabela flights
+if ("flights" %in% tabelas) {
+  cat("\n=== ESTRUTURA DA TABELA FLIGHTS ===\n")
+  colunas_flights <- dbListFields(con, "flights")
+  cat("Colunas disponíveis:", paste(colunas_flights, collapse = ", "), "\n")
+  
+  # Exemplo dos primeiros registros
+  cat("\n=== PRIMEIROS 5 REGISTROS ===\n")
+  sample_query <- "SELECT * FROM flights LIMIT 5"
+  sample_result <- dbGetQuery(con, sample_query)
+  print(sample_result)
+}
+
+# ========================================
+# 8. Fechando conexão
+# ========================================
+
+# Fechando a conexão com o banco
+dbDisconnect(con)
+cat("\nConexão com banco de dados fechada.\n")
+cat("Script executado com sucesso!\n")
+```
