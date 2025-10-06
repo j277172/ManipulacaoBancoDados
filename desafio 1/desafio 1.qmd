@@ -1,0 +1,108 @@
+---
+title: "a"
+format: html
+editor: visual
+embed-resources: true
+---
+
+```{r}
+# Comparação de Performance: read.csv vs read_csv
+# Dataset: flights.csv (Kaggle Flight Delays)
+
+# Carregar pacote readr
+if (!require(readr)) install.packages("readr")
+library(readr)
+
+# ============================================================
+# DESCOMPACTAR dados.zip
+# ============================================================
+cat("Descompactando dados.zip...\n")
+unzip("dados.zip", exdir = ".", overwrite = TRUE)
+cat("✓ Arquivos extraídos!\n\n")
+
+# O arquivo está diretamente no diretório atual, não em uma pasta
+caminho_arquivo <- "flights.csv"
+
+cat("Arquivo:", caminho_arquivo, "\n")
+cat("Tamanho:", round(file.size(caminho_arquivo) / (1024^2), 2), "MB\n\n")
+
+# ============================================================
+# MÉTODO 1: read.csv (base R)
+# ============================================================
+cat(strrep("=", 60), "\n")
+cat("=== MÉTODO 1: read.csv (base R) ===\n")
+cat(strrep("=", 60), "\n\n")
+
+tempo_base <- system.time({
+  dados_base <- read.csv(caminho_arquivo)
+})
+
+cat("Tempo de execução:\n")
+print(tempo_base)
+cat("\nDimensões:", nrow(dados_base), "linhas x", ncol(dados_base), "colunas\n\n")
+
+# Limpar memória
+rm(dados_base)
+gc(verbose = FALSE)
+Sys.sleep(2)
+
+# ============================================================
+# MÉTODO 2: read_csv (readr)
+# ============================================================
+cat(strrep("=", 60), "\n")
+cat("=== MÉTODO 2: read_csv (readr) ===\n")
+cat(strrep("=", 60), "\n\n")
+
+tempo_readr <- system.time({
+  dados_readr <- read_csv(caminho_arquivo, show_col_types = FALSE, progress = FALSE)
+})
+
+cat("Tempo de execução:\n")
+print(tempo_readr)
+cat("\nDimensões:", nrow(dados_readr), "linhas x", ncol(dados_readr), "colunas\n\n")
+
+# Limpar memória
+rm(dados_readr)
+gc(verbose = FALSE)
+
+# ============================================================
+# RESULTADOS
+# ============================================================
+cat("\n")
+cat(strrep("=", 60), "\n")
+cat("=== RESUMO COMPARATIVO ===\n")
+cat(strrep("=", 60), "\n\n")
+
+# Tabela de resultados
+resultados <- data.frame(
+  Método = c("read.csv (base R)", "read_csv (readr)"),
+  Tempo_Usuario = round(c(tempo_base["user.self"], tempo_readr["user.self"]), 3),
+  Tempo_Sistema = round(c(tempo_base["sys.self"], tempo_readr["sys.self"]), 3),
+  Tempo_Total = round(c(tempo_base["elapsed"], tempo_readr["elapsed"]), 3)
+)
+
+print(resultados)
+cat("\n")
+
+# Análise de speedup
+speedup <- tempo_base["elapsed"] / tempo_readr["elapsed"]
+reducao <- ((tempo_base["elapsed"] - tempo_readr["elapsed"]) / tempo_base["elapsed"]) * 100
+
+cat(sprintf("→ read_csv é %.2fx mais rápido que read.csv\n", speedup))
+cat(sprintf("→ Redução de tempo: %.1f%%\n\n", reducao))
+
+# Vencedor
+if (tempo_readr["elapsed"] < tempo_base["elapsed"]) {
+  cat("✓ MÉTODO MAIS RÁPIDO: read_csv (readr)\n")
+  cat(sprintf("  Tempo: %.3f segundos\n", tempo_readr["elapsed"]))
+} else {
+  cat("✓ MÉTODO MAIS RÁPIDO: read.csv (base R)\n")
+  cat(sprintf("  Tempo: %.3f segundos\n", tempo_base["elapsed"]))
+}
+
+# Salvar resultados
+write.csv(resultados, "comparacao_performance.csv", row.names = FALSE)
+cat("\n✓ Resultados salvos em: comparacao_performance.csv\n")
+
+
+```

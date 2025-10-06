@@ -1,0 +1,3 @@
+"Método","Tempo_Usuario","Tempo_Sistema","Tempo_Total"
+"read.csv (base R)",42.86,2.27,45.96
+"read_csv (readr)",41.8,5.03,14.73
