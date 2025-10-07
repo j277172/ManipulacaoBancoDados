@@ -1,0 +1,78 @@
+---
+title: "Untitled"
+format: html
+editor: visual
+jupyter: python3
+---
+
+```{python}
+
+import polars as pl
+
+# 1. Definir nomes e tipos das colunas
+column_names = [
+    "age", "workclass", "fnlwgt", "education", "education-num",
+    "marital-status", "occupation", "relationship", "race", "sex",
+    "capital-gain", "capital-loss", "hours-per-week", "native-country", "income"
+]
+column_types = {
+    "age": pl.Int64, "workclass": pl.Utf8, "fnlwgt": pl.Int64, "education": pl.Utf8,
+    "education-num": pl.Int64, "marital-status": pl.Utf8, "occupation": pl.Utf8,
+    "relationship": pl.Utf8, "race": pl.Utf8, "sex": pl.Utf8,
+    "capital-gain": pl.Int64, "capital-loss": pl.Int64, "hours-per-week": pl.Int64,
+    "native-country": pl.Utf8, "income": pl.Utf8
+}
+
+# 2. Ler o CSV (.gz ou .csv)
+df = pl.read_csv(
+    "renda_adulta.csv.gz",
+    has_header=False,
+    new_columns=column_names,
+    schema=column_types,
+    null_values=["?"]
+)
+
+# 3. Contagem por nível salarial
+contagem_renda = df.group_by("income").len().sort("income")
+print("Contagem por nível salarial:")
+print(contagem_renda)
+
+# 4. Formato longo usando unpivot (variable_name e value_name)
+id_vars = [c for c in column_names if c not in ("capital-gain", "capital-loss")]
+renda_longo = df.unpivot(
+    index=id_vars,
+    on=["capital-gain", "capital-loss"],
+    variable_name="tipo",
+    value_name="Valor"
+)
+print("\nrenda_longo (amostra):")
+print(renda_longo.head(10))
+
+# 5. Médias de horas trabalhadas por classe salarial
+media_horas = df.group_by("income").agg(
+    pl.col("hours-per-week").mean().round(2).alias("media_horas")
+).sort("income")
+print("\nMédia de horas por nível salarial:")
+print(media_horas)
+
+# 6. Número de pessoas por profissão
+contagem_profissao = df.group_by("occupation").len().sort("len", descending=True).rename({"len": "num_pessoas"})
+print("\nPessoas por profissão:")
+print(contagem_profissao)
+
+# 7. Dados para gráfico de barras
+grafico = media_horas.with_columns([
+    pl.col("income").alias("x"),
+    pl.col("media_horas").alias("height")
+])
+print("\nDados para gráfico de barras (x = income, height = media_horas):")
+print(grafico)
+
+# 8. Desafio: discriminação salarial por gênero
+taxa_sexo = df.group_by("sex").agg(
+    (pl.col("income") == ">50K").mean().round(3).alias("pct_alta_renda")
+)
+print("\nPercentual de alta renda por sexo:")
+print(taxa_sexo)
+
+```
