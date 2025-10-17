@@ -1,0 +1,727 @@
+---
+title: "277172"
+format:
+  html:
+    embed-resources: true
+    self-contained: true
+editor: visual
+jupyter: python3
+---
+
+```{python}
+import pandas as pd
+import sqlite3
+import os
+
+# Definir o caminho da pasta com os arquivos
+PASTA = 'desafio13'
+
+# Definir os arquivos e suas respectivas tabelas
+ARQUIVOS = {
+    'basics': 'title.basics0.tsv.gz',
+    'ratings': 'title.ratings.tsv.gz',
+    'principals': 'title.principals0.tsv.gz'
+}
+
+# Nome do banco de dados
+DB_NAME = 'imdb_database.db'
+
+def criar_banco_dados():
+    '''Cria banco de dados SQLite a partir dos arquivos TSV.GZ'''
+    
+    # Criar conexão com o banco de dados
+    conn = sqlite3.connect(DB_NAME)
+    
+    print("=" * 70)
+    print("CRIANDO BANCO DE DADOS SQLite")
+    print("=" * 70)
+    
+    # Processar cada arquivo
+    for nome_tabela, nome_arquivo in ARQUIVOS.items():
+        caminho_completo = os.path.join(PASTA, nome_arquivo)
+        
+        print(f"\n[{nome_tabela.upper()}]")
+        print(f"Arquivo: {nome_arquivo}")
+        
+        try:
+            # Especificar dtypes mais eficientes para reduzir uso de memória
+            # Usar 'object' para strings e tipos menores para números quando possível
+            dtype_specs = {
+                'basics': {
+                    'isAdult': 'Int8',
+                    'startYear': 'Int16',
+                    'endYear': 'Int16',
+                    'runtimeMinutes': 'Int16'
+                },
+                'ratings': {
+                    'averageRating': 'float32',
+                    'numVotes': 'Int32'
+                },
+                'principals': {
+                    'ordering': 'Int16'
+                }
+            }
+            
+            # Obter dtypes específicos para a tabela atual
+            dtype = dtype_specs.get(nome_tabela, None)
+            
+            # Verificar o tamanho do arquivo para decidir estratégia
+            tamanho_arquivo = os.path.getsize(caminho_completo) / (1024 * 1024)  # em MB
+            usar_chunks = tamanho_arquivo > 100  # Usar chunks para arquivos > 100MB
+            
+            if usar_chunks:
+                print(f"  - Arquivo grande ({tamanho_arquivo:.1f} MB) - usando leitura em chunks")
+                
+                # Ler em chunks para arquivos grandes
+                chunk_size = 50000  # Processar 50.000 linhas por vez
+                chunks = pd.read_csv(
+                    caminho_completo,
+                    sep='\t',
+                    compression='gzip',
+                    na_values='\\N',
+                    dtype=dtype,
+                    chunksize=chunk_size,
+                    low_memory=False
+                )
+                
+                # Processar cada chunk
+                total_linhas = 0
+                for i, chunk in enumerate(chunks):
+                    if i == 0:
+                        # Primeira iteração: criar tabela
+                        chunk.to_sql(
+                            nome_tabela,
+                            conn,
+                            if_exists='replace',
+                            index=False
+                        )
+                        print(f"  ✓ Tabela '{nome_tabela}' criada!")
+                        print(f"  - Colunas ({len(chunk.columns)}): {', '.join(chunk.columns.tolist())}")
+                    else:
+                        # Iterações seguintes: adicionar dados
+                        chunk.to_sql(
+                            nome_tabela,
+                            conn,
+                            if_exists='append',
+                            index=False
+                        )
+                    
+                    total_linhas += len(chunk)
+                    print(f"    Processadas {total_linhas:,} linhas...", end='\r')
+                
+                print(f"\n  ✓ Total de {total_linhas:,} registros inseridos!")
+                
+            else:
+                # Ler arquivo completo para arquivos pequenos/médios
+                print(f"  - Arquivo médio ({tamanho_arquivo:.1f} MB) - leitura completa")
+                
+                df = pd.read_csv(
+                    caminho_completo,
+                    sep='\t',
+                    compression='gzip',
+                    low_memory=False,
+                    na_values='\\N',
+                    dtype=dtype
+                )
+                
+                print(f"  ✓ Arquivo lido com sucesso!")
+                print(f"  - Registros: {len(df):,}")
+                print(f"  - Colunas ({len(df.columns)}): {', '.join(df.columns.tolist())}")
+                
+                # Salvar no banco de dados
+                df.to_sql(
+                    nome_tabela,
+                    conn,
+                    if_exists='replace',
+                    index=False,
+                    chunksize=10000
+                )
+                
+                print(f"  ✓ Tabela '{nome_tabela}' criada no banco de dados!")
+            
+        except FileNotFoundError:
+            print(f"  ✗ ERRO: Arquivo não encontrado!")
+            print(f"    Caminho esperado: {caminho_completo}")
+            
+        except MemoryError:
+            print(f"  ✗ ERRO DE MEMÓRIA: Arquivo muito grande")
+            print(f"    Tente aumentar o tamanho dos chunks ou usar um dtype mais eficiente")
+            
+        except Exception as e:
+            print(f"  ✗ ERRO: {str(e)}")
+    
+    print("\n" + "=" * 70)
+    print("VERIFICANDO BANCO DE DADOS")
+    print("=" * 70)
+    
+    # Verificar as tabelas criadas
+    cursor = conn.cursor()
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+    tabelas = cursor.fetchall()
+    
+    if tabelas:
+        print(f"\nTabelas criadas: {len(tabelas)}")
+        for tabela in tabelas:
+            nome_tab = tabela[0]
+            print(f"\n[{nome_tab.upper()}]")
+            
+            # Contar registros
+            cursor.execute(f"SELECT COUNT(*) FROM {nome_tab}")
+            count = cursor.fetchone()[0]
+            print(f"  - Registros: {count:,}")
+            
+            # Listar colunas
+            cursor.execute(f"PRAGMA table_info({nome_tab})")
+            colunas = cursor.fetchall()
+            colunas_nomes = [col[1] for col in colunas]
+            print(f"  - Colunas ({len(colunas)}): {', '.join(colunas_nomes)}")
+            
+            # Mostrar amostra de dados (primeiras 3 linhas)
+            cursor.execute(f"SELECT * FROM {nome_tab} LIMIT 3")
+            amostra = cursor.fetchall()
+            print(f"  - Primeiras 3 linhas:")
+            for i, linha in enumerate(amostra, 1):
+                print(f"    {i}. {linha[:3]}...")
+    else:
+        print("\n⚠ Nenhuma tabela foi criada!")
+    
+    # Fechar conexão
+    conn.close()
+    
+    print("\n" + "=" * 70)
+    print(f"✓ PROCESSO CONCLUÍDO!")
+    print(f"  Banco de dados: {DB_NAME}")
+    print("=" * 70)
+
+if __name__ == '__main__':
+    criar_banco_dados()
+
+
+```
+
+```{python}
+import sqlite3
+import os
+
+# Caminho do arquivo
+DB_PATH = os.path.join('desafio13', 'movies.sqlite3')
+
+# Conectar ao banco de dados
+conn = sqlite3.connect(DB_PATH)
+cursor = conn.cursor()
+
+print("=" * 70)
+print("EXPLORANDO BANCO DE DADOS: movies.sqlite3")
+print("=" * 70)
+
+# 1. LISTAR TODAS AS TABELAS
+print("\n[TABELAS NO BANCO DE DADOS]")
+cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+tabelas = cursor.fetchall()
+
+if tabelas:
+    print(f"Total de tabelas: {len(tabelas)}")
+    for i, tabela in enumerate(tabelas, 1):
+        print(f"  {i}. {tabela[0]}")
+else:
+    print("  Nenhuma tabela encontrada!")
+
+print("\n" + "=" * 70)
+
+# 2. DETALHES DE CADA TABELA
+for tabela in tabelas:
+    nome_tabela = tabela[0]
+    print(f"\n[TABELA: {nome_tabela.upper()}]")
+    
+    # Contar registros
+    cursor.execute(f"SELECT COUNT(*) FROM {nome_tabela}")
+    count = cursor.fetchone()[0]
+    print(f"  - Total de registros: {count:,}")
+    
+    # Listar colunas e tipos
+    cursor.execute(f"PRAGMA table_info({nome_tabela})")
+    colunas = cursor.fetchall()
+    
+    print(f"  - Colunas ({len(colunas)}):")
+    for col in colunas:
+        col_id, col_name, col_type, not_null, default_val, pk = col
+        pk_info = " [PRIMARY KEY]" if pk else ""
+        null_info = " [NOT NULL]" if not_null else ""
+        print(f"      • {col_name} ({col_type}){pk_info}{null_info}")
+    
+    # Mostrar amostra de dados (primeiras 3 linhas)
+    cursor.execute(f"SELECT * FROM {nome_tabela} LIMIT 3")
+    amostra = cursor.fetchall()
+    
+    if amostra:
+        print(f"  - Amostra de dados (3 primeiras linhas):")
+        colunas_nomes = [col[1] for col in colunas]
+        
+        for i, linha in enumerate(amostra, 1):
+            print(f"      Linha {i}:")
+            for j, valor in enumerate(linha):
+                if j < 5:  # Mostrar apenas as 5 primeiras colunas
+                    print(f"        {colunas_nomes[j]}: {valor}")
+            if len(linha) > 5:
+                print(f"        ... (mais {len(linha)-5} colunas)")
+    
+    print()
+
+# 3. VERIFICAR ÍNDICES
+print("=" * 70)
+print("\n[ÍNDICES DO BANCO DE DADOS]")
+cursor.execute("SELECT name, tbl_name FROM sqlite_master WHERE type='index';")
+indices = cursor.fetchall()
+
+if indices:
+    print(f"Total de índices: {len(indices)}")
+    for idx, tabela in indices:
+        print(f"  - {idx} (tabela: {tabela})")
+else:
+    print("  Nenhum índice encontrado!")
+
+# 4. VIEWS (se houver)
+print("\n[VIEWS DO BANCO DE DADOS]")
+cursor.execute("SELECT name FROM sqlite_master WHERE type='view';")
+views = cursor.fetchall()
+
+if views:
+    print(f"Total de views: {len(views)}")
+    for view in views:
+        print(f"  - {view[0]}")
+else:
+    print("  Nenhuma view encontrada!")
+
+# Fechar conexão
+conn.close()
+
+print("\n" + "=" * 70)
+print("✓ EXPLORAÇÃO CONCLUÍDA!")
+print("=" * 70)
+
+```
+
+```{python}
+import sqlite3
+import os
+
+# Conectar ao banco de dados
+DB_PATH = os.path.join('desafio13', 'movies.sqlite3')
+conn = sqlite3.connect(DB_PATH)
+cursor = conn.cursor()
+
+print("=" * 70)
+print("TOP 5 FILMES COM MAIORES NOTAS")
+print("=" * 70)
+
+# Query SQL para encontrar os 5 filmes com maiores notas
+# Ordenando por averageRating (descendente) e numVotes (descendente) para desempate
+# Filtrando apenas filmes (titleType = 'movie')
+query = """
+SELECT 
+    b.tconst,
+    b.primaryTitle,
+    b.titleType,
+    b.startYear,
+    r.averageRating,
+    r.numVotes
+FROM basics b
+INNER JOIN ratings r ON b.tconst = r.tconst
+WHERE b.titleType = 'movie'
+ORDER BY r.averageRating DESC, r.numVotes DESC
+LIMIT 5;
+"""
+
+print("\nExecutando consulta SQL...")
+print("\nQuery:")
+print(query)
+
+cursor.execute(query)
+resultados = cursor.fetchall()
+
+print("\n" + "=" * 70)
+print("RESULTADOS")
+print("=" * 70)
+
+if resultados:
+    print(f"\nEncontrados {len(resultados)} filmes:\n")
+    
+    for i, filme in enumerate(resultados, 1):
+        tconst, titulo, tipo, ano, nota, votos = filme
+        
+        print(f"{i}. {titulo}")
+        print(f"   ID: {tconst}")
+        print(f"   Ano: {ano if ano else 'N/A'}")
+        print(f"   Tipo: {tipo}")
+        print(f"   Nota: {nota}")
+        print(f"   Votos: {int(votos) if votos else 0:,}")
+        print()
+else:
+    print("\nNenhum resultado encontrado!")
+
+print("=" * 70)
+
+# Versão alternativa: Top 5 filmes considerando apenas filmes com >= 10.000 votos
+# (para filtrar filmes obscuros com poucas avaliações)
+print("\nBÔNUS: TOP 5 FILMES COM >= 10.000 VOTOS")
+print("=" * 70)
+
+query_filtrado = """
+SELECT 
+    b.tconst,
+    b.primaryTitle,
+    b.titleType,
+    b.startYear,
+    r.averageRating,
+    r.numVotes
+FROM basics b
+INNER JOIN ratings r ON b.tconst = r.tconst
+WHERE b.titleType = 'movie' AND r.numVotes >= 10000
+ORDER BY r.averageRating DESC, r.numVotes DESC
+LIMIT 5;
+"""
+
+cursor.execute(query_filtrado)
+resultados_filtrados = cursor.fetchall()
+
+if resultados_filtrados:
+    print(f"\nEncontrados {len(resultados_filtrados)} filmes:\n")
+    
+    for i, filme in enumerate(resultados_filtrados, 1):
+        tconst, titulo, tipo, ano, nota, votos = filme
+        
+        print(f"{i}. {titulo}")
+        print(f"   ID: {tconst}")
+        print(f"   Ano: {ano if ano else 'N/A'}")
+        print(f"   Nota: {nota}")
+        print(f"   Votos: {int(votos) if votos else 0:,}")
+        print()
+
+print("=" * 70)
+
+# Fechar conexão
+conn.close()
+
+print("✓ CONSULTA CONCLUÍDA!")
+print("=" * 70)
+
+```
+
+```{python}
+import sqlite3
+import os
+
+# Conectar ao banco de dados
+DB_PATH = os.path.join('desafio13', 'movies.sqlite3')
+conn = sqlite3.connect(DB_PATH)
+cursor = conn.cursor()
+
+print("=" * 70)
+print("GÊNERO MAIS FREQUENTE EM FILMES COM NOTA > 8")
+print("=" * 70)
+
+# Query SQL para encontrar o gênero mais frequente
+# Nota: A coluna genres contém múltiplos gêneros separados por vírgula
+# Exemplo: "Drama,Romance,War"
+query = """
+SELECT 
+    b.genres,
+    COUNT(*) as frequencia,
+    AVG(r.averageRating) as nota_media,
+    COUNT(*) * 100.0 / (SELECT COUNT(*) 
+                        FROM basics b2 
+                        INNER JOIN ratings r2 ON b2.tconst = r2.tconst 
+                        WHERE b2.titleType = 'movie' 
+                        AND r2.averageRating > 8 
+                        AND b2.genres IS NOT NULL) as percentual
+FROM basics b
+INNER JOIN ratings r ON b.tconst = r.tconst
+WHERE b.titleType = 'movie' 
+  AND r.averageRating > 8
+  AND b.genres IS NOT NULL
+GROUP BY b.genres
+ORDER BY frequencia DESC
+LIMIT 10;
+"""
+
+print("\nExecutando consulta SQL...")
+print("\nQuery (Top 10 combinações de gêneros):")
+cursor.execute(query)
+resultados = cursor.fetchall()
+
+print("\n" + "=" * 70)
+print("RESULTADOS - TOP 10 COMBINAÇÕES DE GÊNEROS")
+print("=" * 70)
+
+if resultados:
+    print(f"\nTotal de combinações encontradas: {len(resultados)}\n")
+    
+    for i, resultado in enumerate(resultados, 1):
+        genero, freq, nota_media, percentual = resultado
+        print(f"{i}. {genero}")
+        print(f"   Frequência: {freq:,} filmes")
+        print(f"   Nota média: {nota_media:.2f}")
+        print(f"   Percentual: {percentual:.2f}%")
+        print()
+
+print("=" * 70)
+
+# Análise por gênero individual (separando os gêneros compostos)
+print("\nANÁLISE POR GÊNERO INDIVIDUAL")
+print("=" * 70)
+
+# Primeiro, buscar todos os filmes com nota > 8 e seus gêneros
+query_generos = """
+SELECT b.genres
+FROM basics b
+INNER JOIN ratings r ON b.tconst = r.tconst
+WHERE b.titleType = 'movie' 
+  AND r.averageRating > 8
+  AND b.genres IS NOT NULL;
+"""
+
+cursor.execute(query_generos)
+todos_generos = cursor.fetchall()
+
+# Processar os gêneros (separar por vírgula e contar individualmente)
+contagem_generos = {}
+total_filmes = 0
+
+for linha in todos_generos:
+    generos = linha[0]
+    if generos:
+        # Separar por vírgula e processar cada gênero
+        lista_generos = [g.strip() for g in generos.split(',')]
+        total_filmes += 1
+        for genero in lista_generos:
+            if genero:  # Ignorar strings vazias
+                contagem_generos[genero] = contagem_generos.get(genero, 0) + 1
+
+# Ordenar por frequência
+generos_ordenados = sorted(contagem_generos.items(), key=lambda x: x[1], reverse=True)
+
+print(f"\nTotal de filmes analisados: {total_filmes:,}")
+print(f"Gêneros únicos encontrados: {len(generos_ordenados)}\n")
+
+print("TOP 10 GÊNEROS INDIVIDUAIS:\n")
+for i, (genero, freq) in enumerate(generos_ordenados[:10], 1):
+    percentual = (freq / total_filmes) * 100
+    print(f"{i}. {genero}")
+    print(f"   Aparece em: {freq:,} filmes")
+    print(f"   Percentual: {percentual:.2f}%")
+    print()
+
+# Destacar o gênero mais frequente
+if generos_ordenados:
+    genero_mais_frequente, freq_max = generos_ordenados[0]
+    print("=" * 70)
+    print(f"\n🏆 GÊNERO MAIS FREQUENTE: {genero_mais_frequente}")
+    print(f"   Aparece em {freq_max:,} filmes ({(freq_max/total_filmes)*100:.2f}%)")
+    print("\n" + "=" * 70)
+
+# Estatísticas adicionais
+print("\nESTATÍSTICAS ADICIONAIS")
+print("=" * 70)
+
+query_stats = """
+SELECT 
+    COUNT(DISTINCT b.tconst) as total_filmes,
+    AVG(r.averageRating) as nota_media,
+    MIN(r.averageRating) as nota_minima,
+    MAX(r.averageRating) as nota_maxima,
+    AVG(r.numVotes) as media_votos
+FROM basics b
+INNER JOIN ratings r ON b.tconst = r.tconst
+WHERE b.titleType = 'movie' 
+  AND r.averageRating > 8;
+"""
+
+cursor.execute(query_stats)
+stats = cursor.fetchone()
+
+if stats:
+    total, media, minima, maxima, votos = stats
+    print(f"\nFilmes com nota > 8:")
+    print(f"  - Total de filmes: {int(total):,}")
+    print(f"  - Nota média: {media:.2f}")
+    print(f"  - Nota mínima: {minima:.2f}")
+    print(f"  - Nota máxima: {maxima:.2f}")
+    print(f"  - Média de votos: {int(votos):,}")
+
+# Fechar conexão
+conn.close()
+
+print("\n" + "=" * 70)
+print("✓ ANÁLISE CONCLUÍDA!")
+print("=" * 70)
+
+```
+
+```{python}
+import sqlite3
+import os
+
+# Conectar ao banco de dados
+DB_PATH = os.path.join('desafio13', 'movies.sqlite3')
+conn = sqlite3.connect(DB_PATH)
+cursor = conn.cursor()
+
+print("=" * 70)
+print("TOP 3 ATORES/ATRIZES EM FILMES COM NOTA > 7.5")
+print("=" * 70)
+
+# Query SQL para encontrar os atores/atrizes mais frequentes
+# Filtrando por category = 'actor' ou 'actress'
+query = """
+SELECT 
+    p.nconst,
+    COUNT(DISTINCT p.tconst) as num_filmes,
+    AVG(r.averageRating) as nota_media,
+    MIN(r.averageRating) as nota_minima,
+    MAX(r.averageRating) as nota_maxima
+FROM principals p
+INNER JOIN ratings r ON p.tconst = r.tconst
+INNER JOIN basics b ON p.tconst = b.tconst
+WHERE b.titleType = 'movie'
+  AND r.averageRating > 7.5
+  AND (p.category = 'actor' OR p.category = 'actress')
+GROUP BY p.nconst
+ORDER BY num_filmes DESC
+LIMIT 3;
+"""
+
+print("\nExecutando consulta SQL...")
+print("\nQuery:")
+print(query)
+
+cursor.execute(query)
+resultados = cursor.fetchall()
+
+print("\n" + "=" * 70)
+print("RESULTADOS - TOP 3 ATORES/ATRIZES")
+print("=" * 70)
+
+if resultados:
+    print(f"\nEncontrados {len(resultados)} atores/atrizes:\n")
+    
+    for i, ator in enumerate(resultados, 1):
+        nconst, num_filmes, nota_media, nota_min, nota_max = ator
+        
+        print(f"{i}. ID: {nconst}")
+        print(f"   Número de filmes (nota > 7.5): {num_filmes:,}")
+        print(f"   Nota média dos filmes: {nota_media:.2f}")
+        print(f"   Nota mínima: {nota_min:.2f}")
+        print(f"   Nota máxima: {nota_max:.2f}")
+        print()
+else:
+    print("\nNenhum resultado encontrado!")
+
+print("=" * 70)
+
+# Versão detalhada: Separando atores e atrizes
+print("\nANÁLISE SEPARADA POR CATEGORIA")
+print("=" * 70)
+
+# Top 3 Atores
+print("\nTOP 3 ATORES (category = 'actor'):")
+query_atores = """
+SELECT 
+    p.nconst,
+    COUNT(DISTINCT p.tconst) as num_filmes,
+    AVG(r.averageRating) as nota_media
+FROM principals p
+INNER JOIN ratings r ON p.tconst = r.tconst
+INNER JOIN basics b ON p.tconst = b.tconst
+WHERE b.titleType = 'movie'
+  AND r.averageRating > 7.5
+  AND p.category = 'actor'
+GROUP BY p.nconst
+ORDER BY num_filmes DESC
+LIMIT 3;
+"""
+
+cursor.execute(query_atores)
+atores = cursor.fetchall()
+
+for i, ator in enumerate(atores, 1):
+    nconst, num_filmes, nota_media = ator
+    print(f"  {i}. ID: {nconst} - {num_filmes:,} filmes (média: {nota_media:.2f})")
+
+# Top 3 Atrizes
+print("\nTOP 3 ATRIZES (category = 'actress'):")
+query_atrizes = """
+SELECT 
+    p.nconst,
+    COUNT(DISTINCT p.tconst) as num_filmes,
+    AVG(r.averageRating) as nota_media
+FROM principals p
+INNER JOIN ratings r ON p.tconst = r.tconst
+INNER JOIN basics b ON p.tconst = b.tconst
+WHERE b.titleType = 'movie'
+  AND r.averageRating > 7.5
+  AND p.category = 'actress'
+GROUP BY p.nconst
+ORDER BY num_filmes DESC
+LIMIT 3;
+"""
+
+cursor.execute(query_atrizes)
+atrizes = cursor.fetchall()
+
+for i, atriz in enumerate(atrizes, 1):
+    nconst, num_filmes, nota_media = atriz
+    print(f"  {i}. ID: {nconst} - {num_filmes:,} filmes (média: {nota_media:.2f})")
+
+# Estatísticas gerais
+print("\n" + "=" * 70)
+print("ESTATÍSTICAS GERAIS")
+print("=" * 70)
+
+query_stats = """
+SELECT 
+    p.category,
+    COUNT(DISTINCT p.nconst) as num_pessoas,
+    COUNT(DISTINCT p.tconst) as num_filmes,
+    AVG(r.averageRating) as nota_media
+FROM principals p
+INNER JOIN ratings r ON p.tconst = r.tconst
+INNER JOIN basics b ON p.tconst = b.tconst
+WHERE b.titleType = 'movie'
+  AND r.averageRating > 7.5
+  AND (p.category = 'actor' OR p.category = 'actress')
+GROUP BY p.category;
+"""
+
+cursor.execute(query_stats)
+stats = cursor.fetchall()
+
+print("\nEstatísticas por categoria:")
+for stat in stats:
+    categoria, num_pessoas, num_filmes, nota_media = stat
+    print(f"\n{categoria.upper()}:")
+    print(f"  - Total de {categoria}s diferentes: {num_pessoas:,}")
+    print(f"  - Total de participações em filmes: {num_filmes:,}")
+    print(f"  - Nota média dos filmes: {nota_media:.2f}")
+
+# Total geral de filmes com nota > 7.5
+query_total = """
+SELECT COUNT(DISTINCT b.tconst)
+FROM basics b
+INNER JOIN ratings r ON b.tconst = r.tconst
+WHERE b.titleType = 'movie'
+  AND r.averageRating > 7.5;
+"""
+
+cursor.execute(query_total)
+total_filmes = cursor.fetchone()[0]
+
+print(f"\nTotal de filmes com nota > 7.5: {total_filmes:,}")
+
+# Fechar conexão
+conn.close()
+
+print("\n" + "=" * 70)
+print("✓ CONSULTA CONCLUÍDA!")
+print("=" * 70)
+
+```
