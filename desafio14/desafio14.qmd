@@ -1,0 +1,175 @@
+---
+title: "277172"
+format:
+  html:
+    self-contained: true
+editor: visual
+jupyter: python3
+execute:
+  echo: true       # mostre o código; mude para false se quiser esconder
+  warning: false
+  message: false
+  cache: false
+  # dir: "."       # defina um diretório de execução, se precisar
+---
+
+```{python}
+from plotnine import *
+from plotnine.data import economics, mpg
+
+# Exploração dos dados
+print(economics.head())
+print(mpg.head())
+```
+
+```{python}
+plot01 = (
+    ggplot(economics)
+    + aes(x="date", y="pop")
+    + geom_line()
+    + labs(x="Data", y="População", title="População ao longo do tempo")
+)
+plot01.show()
+
+```
+
+```{python}
+grafico1 = (
+    ggplot(mpg)
+    + aes(x="class", y="hwy")
+    + geom_point()
+    + labs(x="Classe", y="Consumo na Estrada (mpg)")
+)
+grafico1.show()
+
+```
+
+```{python}
+plot02 = (
+    ggplot(mpg)
+    + aes(x="class", y="hwy")
+    + geom_boxplot()
+    + geom_jitter(width=0.2, alpha=0.5)
+    + theme_bw()
+    + labs(x="Tipo de Veículo", y="Consumo na Estrada (mpg)")
+)
+plot02.show()
+
+```
+
+```{python}
+plot03 = (
+    ggplot(mpg)
+    + aes(x="class", y="hwy*0.4251")
+    + geom_boxplot()
+    + geom_jitter(width=0.2, alpha=0.5)
+    + theme_bw()
+    + labs(
+        x="Tipo de Veículo",
+        y="Consumo na Estrada (km/L)",
+        title="Consumo de Combustível",
+        subtitle="Veículos fabricados entre 1999 e 2008"
+    )
+)
+plot03.show()
+```
+
+```{python}
+grafico2 = (
+    ggplot(mpg)
+    + aes(x="cyl", y="hwy")
+    + geom_point()
+    + labs(x="Cilindros", y="Consumo (mpg)")
+)
+grafico2.show()
+```
+
+```{python}
+plot04 = (
+    ggplot(mpg)
+    + aes(x="factor(cyl)", y="hwy*0.4251")
+    + geom_boxplot()
+    + coord_flip()
+    + theme_bw()
+    + labs(x="Número de Cilindros", y="Consumo na Estrada (km/L)")
+)
+plot04.show()
+```
+
+```{python}
+plot05 = (
+    ggplot(mpg)
+    + aes(x="displ", y="hwy*0.4251")
+    + geom_point()
+    + facet_grid("year", "class")
+    + theme_bw()
+    + labs(x="Tamanho do Motor", y="Consumo na Estrada (km/L)")
+)
+plot05.show()
+```
+
+```{python}
+plot06 = (
+    ggplot(mpg)
+    + aes(x="displ", y="hwy*0.4251", color="factor(year)")
+    + geom_point()
+    + facet_grid(cols="class")
+    + theme_bw()
+    + labs(
+        x="Tamanho do Motor",
+        y="Consumo na Estrada (km/L)",
+        color="Ano de Fabricação",
+        title="Consumo de Combustível em Função do Tamanho do Motor",
+        subtitle="Motores maiores consomem mais combustível"
+    )
+)
+plot06.show()
+```
+
+```{python}
+plot07 = (
+    ggplot(mpg)
+    + aes(x="displ", y="hwy*0.4251", color="factor(year)")
+    + geom_point()
+    + facet_grid(cols="class")
+    + theme_bw()
+    + labs(
+        x="Tamanho do Motor",
+        y="Consumo na Estrada (km/L)",
+        color="Ano de Fabricação",
+        title="Consumo de Combustível em Função do Tamanho do Motor",
+        subtitle="Motores maiores consomem mais combustível"
+    )
+)
+plot07.save("grafico07.png", dpi=600)
+"Salvo como grafico07.png"
+```
+
+```{python}
+from datetime import datetime
+datetime.now()
+
+```
+
+```{r}
+library(reticulate)
+
+# Declarar dependência PyYAML
+py_require("pyyaml")
+
+# Mostrar a configuração Python atual (deve incluir path, versão, etc)
+print(py_config())
+
+# Tentar importar o módulo yaml no Python via reticulate
+py_run_string("import yaml")
+py_require("pyyaml")
+
+```
+
+```{r}
+library(reticulate)
+py_require("jupyter")
+library(reticulate)
+py_install("plotnine")
+
+```
