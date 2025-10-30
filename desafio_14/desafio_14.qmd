@@ -1,0 +1,157 @@
+---
+title: "277172"
+format:
+  html:
+    self-contained: true
+editor: visual
+jupyter: python3
+execute:
+  echo: true
+  warning: false
+  message: false
+  cache: false
+---
+
+```{python}
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Carregar o dataset (arquivo .csv.gz do seu diretório local)
+diamonds = pd.read_csv('diamonds.csv.gz')
+
+# Criação do gráfico de dispersão (scatter plot)
+plt.figure(figsize=(8,5))
+plt.scatter(diamonds['carat'], diamonds['price'], alpha=0.3, s=8)
+plt.xlabel('Peso (carat)')
+plt.ylabel('Preço (price)')
+plt.title('Relação entre Peso e Preço dos Diamantes')
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+
+```
+
+```{python}
+print("Ações para garantir a qualidade do gráfico:")
+print("- Escolha do gráfico de dispersão (scatter plot) para variáveis numéricas.")
+print("- Aplicação de transparência (alpha=0.3) para evitar sobreposição excessiva dos pontos.")
+print("- Ajuste do tamanho dos pontos (s=8) para melhorar a visualização.")
+print("- Definição clara de rótulos para os eixos e título explicativo.")
+print("- Inserção de grade (grid) e uso de tight_layout para aumentar nitidez e evitar cortes.")
+
+
+print("\nAchados do gráfico:")
+print("A análise visual do gráfico de dispersão entre peso (carat) e preço (price) dos diamantes revela uma forte associação positiva: diamantes com maior peso tendem a ter preços mais altos. Observa-se também uma dispersão significativa dos preços dentro de cada faixa de peso, sugerindo que outros fatores como corte, cor e clareza influenciam o valor dos diamantes. Portanto, o peso é um importante determinante do preço, mas não é o único fator relevante.")
+
+```
+
+```{python}
+print("A relação positiva entre peso (carat) e preço (price) está presente em todos os cortes de diamantes,")
+print("mas a forma dessa relação varia conforme a qualidade do corte.")
+print("Diamantes com cortes melhores (Premium, Ideal) tendem a ter preços mais altos para um dado peso,")
+print("enquanto cortes inferiores (Fair, Good) associam-se a preços mais baixos para o mesmo peso.")
+print("Isso ocorre porque o corte afeta o brilho e a aparência do diamante, influenciando seu valor de mercado além do peso.")
+print("Apesar disso, a correlação entre carat e preço permanece alta dentro de cada categoria de corte,")
+print("indicando que o peso é um fator determinante em todos os casos, mas o corte ajusta esse valor para cima ou para baixo.")
+print("\nResumindo, a relação peso-preço existe em todos os cortes, porém a inclinação e dispersão dessa relação")
+print("refletem diferenças na qualidade do corte, impactando o preço final do diamante para pesos similares.")
+
+```
+
+```{python}
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+diamonds = pd.read_csv('diamonds.csv.gz')
+diamonds['carat_bin'] = pd.cut(diamonds['carat'], bins=[0,1,2,3,4,5,6], right=False, labels=['0-1','1-2','2-3','3-4','4-5','5-6'])
+
+order_cut = ['Fair', 'Good', 'Very Good', 'Premium', 'Ideal']
+
+plt.figure(figsize=(16, 9))
+sns.set_style("whitegrid")
+pal = sns.color_palette("coolwarm", n_colors=6)
+
+sns.boxplot(x='cut', y='price', hue='carat_bin', data=diamonds[diamonds['price']<=15000], order=order_cut, palette=pal)
+
+plt.xlabel('Corte', fontsize=14)
+plt.ylabel('Preço (USD)', fontsize=14)
+plt.title('Distribuição do Preço por Corte e Faixa de Peso (Carat)', fontsize=18)
+plt.xticks(rotation=15, fontsize=12)
+plt.yticks(fontsize=12)
+
+# Legenda fora do gráfico com bbox_transform para evitar corte
+plt.legend(title='Faixa de peso (carat)', loc='center left', bbox_to_anchor=(1.01, 0.5), fontsize=12, title_fontsize=13)
+plt.tight_layout(rect=[0, 0, 0.85, 1])  # Restringe área do gráfico para 85% da largura, dando espaço para a legenda
+
+plt.show()
+
+
+
+```
+
+```{python}
+print("A conclusão da análise sobre a relação entre peso (carat), preço (price) e corte (cut) dos diamantes é que o valor do diamante não é determinado apenas pelo seu peso,")
+print("mas por uma combinação dos chamados 4Cs: carat (quilate), cut (corte), color (cor) e clarity (clareza).")
+print("O peso em quilates é fundamental, pois diamantes maiores são mais raros e tendem a custar mais, porém o corte é considerado o fator mais importante para determinar a aparência e o valor final da pedra,")
+print("pois ele influencia diretamente no brilho e na qualidade da lapidação.")
+print("Um diamante com um corte excelente pode valer significativamente mais do que outro de quilate maior, mas com corte inferior.")
+print("Assim, embora o peso e o preço estejam positivamente correlacionados, o corte ajusta essa relação, impactando a variação do preço para diamantes de mesmo peso,")
+print("e é um componente controlador-chave do valor no mercado de diamantes.")
+print("Portanto, para avaliar corretamente um diamante, é preciso considerar todos os 4Cs, não apenas o peso.")
+
+```
+
+```{python}
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# Carregar dataset
+diamonds = pd.read_csv('diamonds.csv.gz')
+
+# Configurar estilo e tamanho da figura
+sns.set(style="whitegrid")
+g = sns.FacetGrid(diamonds.sample(2000), col="cut", row="color", hue="clarity", height=3, aspect=1.2, palette="viridis", margin_titles=True)
+
+# Plotar scatter
+g.map_dataframe(sns.scatterplot, x="carat", y="price", alpha=0.6, edgecolor=None)
+
+# Ajustar legenda e títulos
+g.add_legend(title="Clareza")
+g.set_axis_labels("Peso (carat)", "Preço (USD)")
+g.set_titles(col_template="{col_name}", row_template="{row_name}")
+
+plt.subplots_adjust(top=0.9)
+g.fig.suptitle("Relação entre Preço e Peso por Corte e Cor com Clareza Diferenciada")
+
+plt.show()
+
+```
+
+```{python}
+print("Dificuldades encontradas na análise da relação entre preço, peso, corte, cor e clareza dos diamantes:")
+print("- Complexidade elevada do dataset devido à grande combinação de categorias nas variáveis categóricas.")
+print("- Visualização de múltiplas variáveis categóricas junto com variáveis numéricas é desafiadora e pode gerar sobrecarga visual.")
+print("- Grande quantidade de pontos pode causar sobreposição, lentidão e poluição visual no gráfico.")
+print("- Necessidade de reduzir a amostra ou usar facetas para manter performance e clareza pode ocultar padrões em subconjuntos.")
+print("- Interpretação de relações em múltiplas dimensões exige cuidado para evitar conclusões simplistas ou incorretas.")
+print("\nEssas dificuldades ressaltam a importância do pré-processamento, segmentação inteligente dos dados e uso de ferramentas interativas.")
+
+```
+
+```{python}
+print("A relação entre preço e peso não é exatamente a mesma para diferentes configurações de diamantes,")
+print("pois ela é influenciada por fatores como qualidade do corte, cor e clareza.")
+print("Em geral, há uma forte correlação positiva entre peso (carat) e preço (price) em todas as configurações,")
+print("já que diamantes maiores tendem a ser mais caros.")
+print("Contudo, cortes melhores (Ideal e Premium), cores mais transparentes (D, E, F) e maiores níveis de clareza (IF, VVS1)")
+print("tendem a resultar em preços mais elevados para o mesmo peso, alterando a inclinação e o nível da relação preço-peso.")
+print("Essas variáveis ajustam o preço, fazendo com que, para o mesmo carat, diamantes de melhor qualidade apresentem preços mais altos")
+print("comparados a diamantes com menor qualidade em alguma das características.")
+print("Assim, apesar da tendência geral de aumento de preço com peso, configurações diferentes de corte, cor e clareza")
+print("modificam essa relação, tanto na dispersão quanto no valor médio dos preços para cada peso.")
+print("\nEssa variação evidencia a importância de considerar todos os 4Cs na avaliação do valor do diamante e não apenas o peso.")
+
+```
